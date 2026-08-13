@@ -43,6 +43,8 @@ class _SupportScreenState extends State<SupportScreen> {
     {'q': AppStrings.get('faq8q'), 'a': AppStrings.get('faq8a')},
     {'q': AppStrings.get('faq9q'), 'a': AppStrings.get('faq9a')},
     {'q': AppStrings.get('faq10q'), 'a': AppStrings.get('faq10a')},
+    {'q': AppStrings.get('faq11q'), 'a': AppStrings.get('faq11a')},
+    {'q': AppStrings.get('faq12q'), 'a': AppStrings.get('faq12a')},
   ];
 
   static const List<Map<String, dynamic>> _contactOptions = [
