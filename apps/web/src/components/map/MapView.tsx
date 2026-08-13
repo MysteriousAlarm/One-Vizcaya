@@ -35,6 +35,16 @@ const PRIORITY_WEIGHT: Record<string, number> = {
   critical: 4, high: 3, medium: 2, low: 1,
 };
 
+// Time-range switch: lets admins re-aggregate the map by how recent a report is
+// (today / this week / this month) or see the running total.
+type TimeRange = "day" | "week" | "month" | "all";
+const RANGE_LABEL: Record<TimeRange, string> = {
+  day: "Today", week: "This Week", month: "This Month", all: "All Time",
+};
+const RANGE_DAYS: Record<Exclude<TimeRange, "all">, number> = {
+  day: 1, week: 7, month: 30,
+};
+
 // Choropleth: interpolates hue from green (120°) → yellow (60°) → red (0°) based on intensity 0–1
 function choroplethColor(count: number, max: number): { fill: string; stroke: string; opacity: number } {
   if (max === 0 || count === 0) {
@@ -70,28 +80,38 @@ export function MapView({ reports, responders }: MapViewProps) {
   const [showResponders, setShowResponders] = useState(true);
   const [showPins,       setShowPins]       = useState(false);
   const [muniFilter,     setMuniFilter]     = useState("all");
+  const [timeRange,      setTimeRange]      = useState<TimeRange>("all");
   const [selectedReport,    setSelectedReport]    = useState<Report | null>(null);
   const [selectedResponder, setSelectedResponder] = useState<Responder | null>(null);
 
-  const filteredReports    = useMemo(() => muniFilter === "all" ? reports    : reports.filter((r) => r.municipality === muniFilter),    [reports, muniFilter]);
+  // First stage: keep only reports inside the selected time window. Every
+  // aggregation below is derived from this so the heatmap, zone counts, and
+  // pins all re-sort when the admin flips the range.
+  const timeFilteredReports = useMemo(() => {
+    if (timeRange === "all") return reports;
+    const cutoff = Date.now() - RANGE_DAYS[timeRange] * 86_400_000;
+    return reports.filter((r) => r.reportedAt.getTime() >= cutoff);
+  }, [reports, timeRange]);
+
+  const filteredReports    = useMemo(() => muniFilter === "all" ? timeFilteredReports : timeFilteredReports.filter((r) => r.municipality === muniFilter), [timeFilteredReports, muniFilter]);
   const filteredResponders = useMemo(() => muniFilter === "all" ? responders : responders.filter((r) => r.municipality === muniFilter), [responders, muniFilter]);
 
   // Weighted intensity per municipality (critical counts 4×, etc.)
   const intensityByMuni = useMemo(() =>
-    reports.reduce<Record<string, number>>((acc, r) => {
+    timeFilteredReports.reduce<Record<string, number>>((acc, r) => {
       if (r.status === "solved") return acc;
       acc[r.municipality] = (acc[r.municipality] ?? 0) + (PRIORITY_WEIGHT[r.priority] ?? 1);
       return acc;
     }, {}),
-  [reports]);
+  [timeFilteredReports]);
 
   // Raw count per municipality (for zone bubbles)
   const countByMuni = useMemo(() =>
-    reports.reduce<Record<string, number>>((acc, r) => {
+    timeFilteredReports.reduce<Record<string, number>>((acc, r) => {
       acc[r.municipality] = (acc[r.municipality] ?? 0) + 1;
       return acc;
     }, {}),
-  [reports]);
+  [timeFilteredReports]);
 
   const maxIntensity = useMemo(() => Math.max(...Object.values(intensityByMuni), 1), [intensityByMuni]);
   const maxCount     = useMemo(() => Math.max(...Object.values(countByMuni), 1),     [countByMuni]);
@@ -148,6 +168,17 @@ export function MapView({ reports, responders }: MapViewProps) {
           </SelectContent>
         </Select>
 
+        <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+          <SelectTrigger className="h-8 text-xs w-36" aria-label="Filter by time range">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(RANGE_LABEL) as TimeRange[]).map((r) => (
+              <SelectItem key={r} value={r}>{RANGE_LABEL[r]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Map layer toggles">
           <ToggleButton active={showHeatmap}    onClick={() => setShowHeatmap(!showHeatmap)}       icon={<Layers  className="h-3.5 w-3.5" aria-hidden />} label="Intensity" />
           <ToggleButton active={showZones}      onClick={() => setShowZones(!showZones)}           icon={<span className="h-3.5 w-3.5 flex items-center justify-center text-[9px] font-black leading-none" aria-hidden>●</span>} label="Zones" />
@@ -156,7 +187,8 @@ export function MapView({ reports, responders }: MapViewProps) {
         </div>
 
         <span className="text-xs text-muted-foreground ml-auto hidden sm:block">
-          {activeCount} active{gpsCount > 0 ? ` · ${gpsCount} with GPS` : ""}
+          {filteredReports.length} report{filteredReports.length === 1 ? "" : "s"} · {RANGE_LABEL[timeRange]}
+          {activeCount > 0 ? ` · ${activeCount} active` : ""}{gpsCount > 0 ? ` · ${gpsCount} GPS` : ""}
         </span>
       </div>
 
