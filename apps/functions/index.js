@@ -836,6 +836,80 @@ exports.onNewAnnouncement = onDocumentCreated(
   }
 );
 
+/**
+ * Interim "Import from link" helper for announcements. Given a public post URL
+ * (e.g. the Governor's Office Facebook page, a news site, or a gov advisory),
+ * fetches the page server-side (avoids browser CORS) and returns its Open Graph
+ * metadata so an admin can review and publish it as an announcement with one
+ * click — no manual retyping. This does NOT auto-post; a human still confirms.
+ *
+ * NOTE: this reads a page's public preview tags (the same thing a link preview
+ * in Messenger/Viber does). The full Graph-API integration that auto-syncs an
+ * official Page comes later, once the project has an approved government
+ * contract and Page access.
+ */
+exports.fetchLinkPreview = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in required.");
+  }
+  const url = String(request.data?.url || "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    throw new HttpsError("invalid-argument", "Enter a valid http(s) link.");
+  }
+
+  let html = "";
+  try {
+    const resp = await fetch(url, {
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; OneVizcayaBot/1.0; +https://nuevavizcaya.gov.ph)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    html = await resp.text();
+  } catch (e) {
+    console.error("fetchLinkPreview error:", e);
+    throw new HttpsError("unavailable", "Could not fetch that link.");
+  }
+
+  const decode = (s) =>
+    (s || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;|&apos;/gi, "'")
+      .replace(/&#x27;/gi, "'")
+      .trim();
+
+  const meta = (prop) => {
+    const a = new RegExp(
+      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`,
+      "i"
+    );
+    const b = new RegExp(
+      `<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`,
+      "i"
+    );
+    const m = html.match(a) || html.match(b);
+    return m ? decode(m[1]) : "";
+  };
+
+  const titleTag = () => {
+    const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    return m ? decode(m[1]) : "";
+  };
+
+  return {
+    title: meta("og:title") || titleTag(),
+    description: meta("og:description") || meta("description"),
+    image: meta("og:image") || meta("og:image:url"),
+    siteName: meta("og:site_name"),
+    url: meta("og:url") || url,
+  };
+});
+
 // ── RA 10173: storage cleanup helper ─────────────────────────────────────────
 // Derives the Storage object path from a Firebase download URL and deletes it.
 // Used to guarantee no orphaned photo evidence (with embedded EXIF/location)

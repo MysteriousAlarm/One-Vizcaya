@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBcRDu74Y7CRkvIXFokK-cO07_nMk62fp8",
@@ -15,6 +16,7 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const functions = getFunctions(app);
 
 export const MAPS_API_KEY = "AIzaSyCcKuCdQDdl6pxlLTFy88wTpEfjj2rwikI";
 export const APP_VERSION = "2.0.0";
