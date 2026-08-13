@@ -7,6 +7,7 @@ import '../../domain/enums/report_priority.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../../data/repositories_impl/firebase_report_repository.dart';
 import '../state/municipality_state.dart';
+import '../../core/utils/color_utils.dart';
 import '../widgets/report_status_card.dart';
 import 'qr_scanner_screen.dart';
 
@@ -43,11 +44,11 @@ class _ReportStatusScreenState extends State<ReportStatusScreen> {
   }
 
   PopupMenuItem<ReportSort> _sortItem(
-      ReportSort value, String label, IconData icon) {
+      ReportSort value, String label, IconData icon, Color accent) {
     final selected = _sort == value;
-    final color = selected
-        ? (oneVizcayaState.activeTheme['appBarColor'] as Color)
-        : null;
+    // [accent] is already contrast-adjusted for the current theme so the
+    // selected item stays legible in dark mode.
+    final color = selected ? accent : null;
     return PopupMenuItem<ReportSort>(
       value: value,
       child: Row(
@@ -90,6 +91,9 @@ class _ReportStatusScreenState extends State<ReportStatusScreen> {
   @override
   Widget build(BuildContext context) {
     final activeLguColor = oneVizcayaState.activeTheme['appBarColor'] as Color;
+    // Contrast-adjusted accent for foreground use (sort menu, accents) so a dark
+    // municipality colour stays readable on dark surfaces.
+    final readableAccent = ColorUtils.readableAccentOf(context, activeLguColor);
     final activeMunicipalityName = oneVizcayaState.selectedMunicipality.value;
     final user = FirebaseAuth.instance.currentUser;
 
@@ -111,13 +115,13 @@ class _ReportStatusScreenState extends State<ReportStatusScreen> {
             onSelected: (value) => setState(() => _sort = value),
             itemBuilder: (context) => [
               _sortItem(ReportSort.newest, AppStrings.get('sortNewest'),
-                  Icons.schedule),
+                  Icons.schedule, readableAccent),
               _sortItem(ReportSort.oldest, AppStrings.get('sortOldest'),
-                  Icons.history),
+                  Icons.history, readableAccent),
               _sortItem(ReportSort.highestPriority,
-                  AppStrings.get('sortHighest'), Icons.arrow_upward),
+                  AppStrings.get('sortHighest'), Icons.arrow_upward, readableAccent),
               _sortItem(ReportSort.lowestPriority,
-                  AppStrings.get('sortLowest'), Icons.arrow_downward),
+                  AppStrings.get('sortLowest'), Icons.arrow_downward, readableAccent),
             ],
           ),
           IconButton(

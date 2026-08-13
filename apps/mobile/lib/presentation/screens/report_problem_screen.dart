@@ -24,6 +24,7 @@ import '../../data/services/geolocator_service.dart';
 import '../../data/services/offline_queue_service.dart';
 import '../../data/services/priority_service.dart';
 import '../state/municipality_state.dart';
+import '../../core/utils/color_utils.dart';
 
 class ReportProblemScreen extends StatefulWidget {
   const ReportProblemScreen({super.key});
@@ -424,12 +425,17 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   @override
   Widget build(BuildContext context) {
     final dynamicTheme = oneVizcayaState.activeTheme;
-    final primaryLguColor = dynamicTheme['appBarColor'] as Color;
+    // Raw accent is used for FILLED backgrounds (app bar, submit button) that
+    // carry white text. For every foreground use (icons, labels, borders) we
+    // use a contrast-adjusted variant so a dark municipality colour (e.g.
+    // Bambang maroon, Bayombong dark green) stays legible in dark mode.
+    final rawLguColor = dynamicTheme['appBarColor'] as Color;
+    final primaryLguColor = ColorUtils.readableAccentOf(context, rawLguColor);
     final activeMunicipalityName = oneVizcayaState.selectedMunicipality.value;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: primaryLguColor,
+        backgroundColor: rawLguColor,
         foregroundColor: Colors.white,
         title: Text(
           '${AppStrings.get('reportProblem')} ${AppStrings.get('prepositionTo')} $activeMunicipalityName',
@@ -748,7 +754,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _submitReport,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryLguColor,
+                        backgroundColor: rawLguColor,
                         foregroundColor: Colors.white,
                       ),
                       child: _isSubmitting
