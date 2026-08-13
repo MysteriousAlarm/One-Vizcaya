@@ -776,6 +776,66 @@ exports.onNewBroadcast = onDocumentCreated(
   }
 );
 
+/**
+ * Sends a push notification when a new announcement is posted, so citizens are
+ * alerted the same way they are for report updates and broadcasts. Targets the
+ * announcement's municipality (or every user when municipality == "All").
+ * The announcement itself is the record — the mobile inbox reads it directly,
+ * so no per-user notification documents are fanned out here.
+ */
+exports.onNewAnnouncement = onDocumentCreated(
+  "announcements/{announcementId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const title = data.title;
+    const body = data.body;
+    const municipality = data.municipality || "All";
+    if (!title) return;
+
+    const db = admin.firestore();
+
+    // "All" → every user with a token; otherwise only that municipality's users.
+    const query =
+      municipality === "All"
+        ? db.collection("users").where("fcmToken", "!=", null)
+        : db.collection("users").where("municipality", "==", municipality);
+
+    const usersSnap = await query.get();
+    if (usersSnap.empty) return;
+
+    const tokens = usersSnap.docs.map((d) => d.data().fcmToken).filter(Boolean);
+    if (tokens.length === 0) return;
+
+    const isUrgent = data.isUrgent === true;
+    const pushTitle = isUrgent ? `⚠ ${title}` : title;
+    const pushBody = (body || "").slice(0, 240);
+
+    for (let i = 0; i < tokens.length; i += 500) {
+      const batch = tokens.slice(i, i + 500);
+      await admin
+        .messaging()
+        .sendEachForMulticast({
+          tokens: batch,
+          notification: { title: pushTitle, body: pushBody },
+          android: {
+            notification: {
+              channelId: "one_vizcaya_broadcasts",
+              priority: "high",
+              color: isUrgent ? "#D32F2F" : "#1B5E20",
+            },
+          },
+          data: {
+            type: "announcement",
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        })
+        .catch((e) => console.error("Announcement FCM batch failed:", e));
+    }
+  }
+);
+
 // ── RA 10173: storage cleanup helper ─────────────────────────────────────────
 // Derives the Storage object path from a Firebase download URL and deletes it.
 // Used to guarantee no orphaned photo evidence (with embedded EXIF/location)
