@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/utils/toast_utils.dart';
+import '../../core/utils/color_utils.dart';
 import '../state/municipality_state.dart';
 
 class EmergencyContactsScreen extends StatelessWidget {
@@ -264,6 +265,34 @@ class EmergencyContactsScreen extends StatelessWidget {
     {'name': 'Provincial Disaster Risk Reduction (PDRRMO)', 'number': '09171227150', 'type': 'disaster'},
   ];
 
+  // Groups the long national-hotline list into readable categories so the
+  // collapsed "National / Government Hotlines" panel is organised, not a wall.
+  static const Map<String, String> _categoryOfType = {
+    'general': 'General Emergency',
+    'disaster': 'Disaster, Weather & Infrastructure',
+    'infrastructure': 'Disaster, Weather & Infrastructure',
+    'police': 'Police & Security',
+    'cyber': 'Police & Security',
+    'medical': 'Health & Medical',
+    'mentalHealth': 'Mental Health & Crisis',
+    'women': 'Women, Children & Welfare',
+    'gov': 'Government & Citizen Services',
+    'redcross': 'Humanitarian & Utilities',
+    'fire': 'Humanitarian & Utilities',
+    'utility': 'Humanitarian & Utilities',
+  };
+
+  static const List<String> _categoryOrder = [
+    'General Emergency',
+    'Disaster, Weather & Infrastructure',
+    'Police & Security',
+    'Health & Medical',
+    'Mental Health & Crisis',
+    'Women, Children & Welfare',
+    'Government & Citizen Services',
+    'Humanitarian & Utilities',
+  ];
+
   IconData _getIconForType(String? type) {
     switch (type) {
       case 'police':
@@ -370,30 +399,73 @@ class EmergencyContactsScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildSectionHeader(String title, Color lguColor) {
+  // A collapsible group of contacts. Keeps the screen compact — the user
+  // expands only the section they need instead of scrolling one long list.
+  Widget _collapsibleSection({
+    required String title,
+    required int count,
+    required Color accent,
+    required IconData icon,
+    required bool initiallyExpanded,
+    required List<Widget> children,
+  }) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: initiallyExpanded,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        leading: Icon(icon, color: accent),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: accent,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  color: accent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        childrenPadding: const EdgeInsets.only(bottom: 6),
+        children: children,
+      ),
+    );
+  }
+
+  // Lightweight label separating categories inside the national section.
+  Widget _buildSubHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 16, 8, 6),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              color: lguColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-              color: lguColor,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          letterSpacing: 0.6,
+          color: Colors.grey.shade600,
+        ),
       ),
     );
   }
@@ -458,14 +530,28 @@ class EmergencyContactsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeLguColor = oneVizcayaState.activeTheme['appBarColor'] as Color;
+    final rawLguColor = oneVizcayaState.activeTheme['appBarColor'] as Color;
+    // Contrast-adjusted accent for section titles/icons (Task 1 helper).
+    final accent = ColorUtils.readableAccentOf(context, rawLguColor);
     final activeMunicipalityName = oneVizcayaState.selectedMunicipality.value;
 
     final localContacts = _localContacts[activeMunicipalityName] ?? [];
 
+    // Organise the national hotlines into ordered, labelled categories.
+    final nationalChildren = <Widget>[];
+    for (final category in _categoryOrder) {
+      final items = _nationalHotlines
+          .where((c) => _categoryOfType[c['type']] == category)
+          .toList();
+      if (items.isEmpty) continue;
+      nationalChildren.add(_buildSubHeader(category));
+      nationalChildren.addAll(
+          items.map((c) => _buildContactTile(c, rawLguColor, context)));
+    }
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: activeLguColor,
+        backgroundColor: rawLguColor,
         foregroundColor: Colors.white,
         title: Text('$activeMunicipalityName ${AppStrings.get('emergencyContacts')}'),
       ),
@@ -473,27 +559,44 @@ class EmergencyContactsScreen extends StatelessWidget {
         top: false,
         child: ListView(
           padding: EdgeInsets.only(
+            top: 6,
             bottom: MediaQuery.of(context).padding.bottom + 32,
           ),
           children: [
-            // ── Local contacts ──
-            if (localContacts.isNotEmpty) ...[
-              _buildSectionHeader(
-                  '$activeMunicipalityName ${AppStrings.get('localContacts')}', activeLguColor),
-              ...localContacts.map(
-                  (c) => _buildContactTile(c, activeLguColor, context)),
-            ],
+            // ── Local contacts (most relevant → expanded by default) ──
+            if (localContacts.isNotEmpty)
+              _collapsibleSection(
+                title: '$activeMunicipalityName ${AppStrings.get('localContacts')}',
+                count: localContacts.length,
+                accent: accent,
+                icon: Icons.location_city_outlined,
+                initiallyExpanded: true,
+                children: localContacts
+                    .map((c) => _buildContactTile(c, rawLguColor, context))
+                    .toList(),
+              ),
 
-            // ── Province-wide services (shown for every municipality) ──
-            _buildSectionHeader('Provincial Services', activeLguColor),
-            ..._provincialServices.map(
-                (c) => _buildContactTile(c, activeLguColor, context)),
+            // ── Province-wide services (collapsed) ──
+            _collapsibleSection(
+              title: 'Provincial Services',
+              count: _provincialServices.length,
+              accent: accent,
+              icon: Icons.apartment_outlined,
+              initiallyExpanded: false,
+              children: _provincialServices
+                  .map((c) => _buildContactTile(c, rawLguColor, context))
+                  .toList(),
+            ),
 
-            // ── National / Provincial hotlines ──
-            _buildSectionHeader(
-                AppStrings.get('nationalHotlines'), activeLguColor),
-            ..._nationalHotlines.map(
-                (c) => _buildContactTile(c, activeLguColor, context)),
+            // ── National / Government hotlines (collapsed, categorised) ──
+            _collapsibleSection(
+              title: AppStrings.get('nationalHotlines'),
+              count: _nationalHotlines.length,
+              accent: accent,
+              icon: Icons.public_outlined,
+              initiallyExpanded: false,
+              children: nationalChildren,
+            ),
           ],
         ),
       ),
