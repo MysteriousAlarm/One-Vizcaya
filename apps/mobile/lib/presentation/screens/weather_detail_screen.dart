@@ -612,8 +612,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
             child: Container(
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF243C63).withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Stack(
                 children: [
@@ -753,8 +754,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF243C63).withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -785,8 +787,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF243C63).withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,10 +859,13 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
 
   Widget _detailTileContainer({required Widget child, String? title}) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        // Nested navy panel with a hairline border — matches the card treatment
+        // so the inner tiles read as distinct instead of washed-out white boxes.
+        color: const Color(0xFF243C63).withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,8 +874,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
             Text(
               title.toUpperCase(),
               style: const TextStyle(
-                color: Colors.white60,
+                color: Color(0xFF9FB2D0),
                 fontSize: 11,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,
               ),
             ),
