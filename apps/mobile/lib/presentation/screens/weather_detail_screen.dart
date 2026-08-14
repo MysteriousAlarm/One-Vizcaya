@@ -66,23 +66,25 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
         d.conditionMain == 'Drizzle' ||
         d.conditionMain == 'Thunderstorm';
 
+    // PANaHON-style deep blue → near-black palette. All variants stay dark and
+    // blue (never washed-out grey) so the cards and coloured data pop.
     if (isNight) {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF0D1B3E), Color(0xFF1A237E), Color(0xFF283593)],
+        colors: [Color(0xFF060B1A), Color(0xFF0C1533), Color(0xFF16244D)],
       );
     } else if (isRainy) {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF455A64), Color(0xFF546E7A), Color(0xFF607D8B)],
+        colors: [Color(0xFF0E1726), Color(0xFF1B2C45), Color(0xFF294060)],
       );
     } else {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF1565C0), Color(0xFF1976D2), Color(0xFFE3A818)],
+        colors: [Color(0xFF0B1E3B), Color(0xFF13315C), Color(0xFF1C5A96)],
       );
     }
   }
@@ -144,12 +146,28 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
 
   Widget _frostedCard({required Widget child, EdgeInsets? margin}) {
     return Container(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: const EdgeInsets.all(16),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        // Deep translucent navy card (PANaHON look) with a hairline highlight
+        // border and a soft drop shadow so cards read as distinct panels.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF1B2A47).withValues(alpha: 0.62),
+            const Color(0xFF111C33).withValues(alpha: 0.62),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );
@@ -157,20 +175,20 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
 
   Widget _sectionTitle(String title, {IconData? icon}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon, color: Colors.white70, size: 16),
-            const SizedBox(width: 6),
+            Icon(icon, color: const Color(0xFF7FB2FF), size: 16),
+            const SizedBox(width: 7),
           ],
           Text(
             title.toUpperCase(),
             style: const TextStyle(
-              color: Colors.white70,
+              color: Color(0xFFB9C7E0),
               fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.0,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
             ),
           ),
         ],
@@ -1122,6 +1140,8 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
   Widget _buildMoonPhase() {
     final phase = WeatherService.moonPhase(DateTime.now());
     final phaseName = WeatherService.moonPhaseName(phase);
+    final waxing = phase <= 0.5;
+    final illum = ((waxing ? phase * 2 : (1 - phase) * 2) * 100).round();
 
     return _frostedCard(
       child: Column(
@@ -1131,33 +1151,38 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
           Row(
             children: [
               SizedBox(
-                width: 80,
-                height: 80,
+                width: 92,
+                height: 92,
                 child: CustomPaint(painter: _MoonPhasePainter(phase: phase)),
               ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    phaseName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      phaseName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${(phase * 100).toStringAsFixed(0)}% of cycle',
-                    style: const TextStyle(color: Colors.white60, fontSize: 13),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Moonrise / Moonset: —',
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '$illum% illuminated',
+                      style: const TextStyle(
+                          color: Color(0xFF7FB2FF),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${waxing ? "Waxing" : "Waning"} · ${(phase * 100).round()}% through the lunar cycle',
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1170,7 +1195,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: const Color(0xFF1565C0),
+        backgroundColor: const Color(0xFF0B1E3B),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1189,7 +1214,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
 
     if (_error != null && _data == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFF1565C0),
+        backgroundColor: const Color(0xFF0B1E3B),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -1663,74 +1688,60 @@ class _MoonPhasePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final radius = size.width / 2 - 4;
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 4;
 
-    // Draw the lit portion as a circle
-    final moonPaint = Paint()
-      ..color = const Color(0xFFE0E0E0)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(cx, cy), radius, moonPaint);
+    const lit = Color(0xFFEAF0FA);
+    const dark = Color(0xFF223052);
 
-    // Draw the shadow
-    final shadowPaint = Paint()
-      ..color = const Color(0xFF1A237E).withValues(alpha: 0.85)
-      ..style = PaintingStyle.fill;
-
-    // Simple shadow: cover the dark side
-    if (phase < 0.5) {
-      // Waxing: dark on left
-      final shadowFraction = 1.0 - phase * 2;
-      final ellipseW = radius * shadowFraction.abs();
-      final rect = Rect.fromCenter(
-        center: Offset(cx, cy),
-        width: ellipseW * 2,
-        height: radius * 2,
-      );
-      if (phase < 0.25) {
-        // New to First Quarter: mostly dark left
-        canvas.drawCircle(Offset(cx, cy), radius, shadowPaint);
-        canvas.drawOval(
-          rect,
-          Paint()
-            ..color = const Color(0xFFE0E0E0)
-            ..style = PaintingStyle.fill,
-        );
-      } else {
-        // First Quarter to Full: mostly lit, small shadow left
-        canvas.drawOval(rect, shadowPaint);
-      }
-    } else {
-      // Waning: dark on right
-      final shadowFraction = (phase - 0.5) * 2;
-      final ellipseW = radius * shadowFraction;
-      final rect = Rect.fromCenter(
-        center: Offset(cx, cy),
-        width: ellipseW * 2,
-        height: radius * 2,
-      );
-      if (phase < 0.75) {
-        // Full to Last Quarter
-        canvas.drawOval(rect, shadowPaint);
-      } else {
-        // Last Quarter to New
-        canvas.drawCircle(Offset(cx, cy), radius, shadowPaint);
-        canvas.drawOval(
-          rect,
-          Paint()
-            ..color = const Color(0xFFE0E0E0)
-            ..style = PaintingStyle.fill,
-        );
-      }
-    }
-
-    // Outer circle border
+    // Soft outer glow so a bright moon feels luminous.
     canvas.drawCircle(
-      Offset(cx, cy),
-      radius,
+      c,
+      r + 3,
       Paint()
-        ..color = Colors.white38
+        ..color = const Color(0xFF9FC3FF).withValues(alpha: 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+
+    // Base dark disc.
+    canvas.drawCircle(c, r, Paint()..color = dark);
+
+    // Illuminated fraction (0 = new, 1 = full) and lit side.
+    final waxing = phase <= 0.5;
+    final f = waxing ? phase * 2 : (1 - phase) * 2;
+
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
+
+    // Lit half (right when waxing, left when waning).
+    final litHalf = waxing
+        ? Rect.fromLTRB(c.dx, c.dy - r, c.dx + r, c.dy + r)
+        : Rect.fromLTRB(c.dx - r, c.dy - r, c.dx, c.dy + r);
+    canvas.drawRect(litHalf, Paint()..color = lit);
+
+    // Terminator ellipse: dark ellipse carves a crescent (f < .5),
+    // lit ellipse fills a gibbous (f > .5).
+    final termW = (r * (1 - 2 * f)).abs();
+    final termRect =
+        Rect.fromCenter(center: c, width: termW * 2, height: r * 2);
+    canvas.drawOval(termRect, Paint()..color = f < 0.5 ? dark : lit);
+    canvas.restore();
+
+    // A few subtle maria (craters) on the lit disc for texture.
+    final crater = Paint()..color = const Color(0xFFB9C4D8).withValues(alpha: 0.5);
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
+    canvas.drawCircle(c.translate(-r * 0.28, -r * 0.22), r * 0.14, crater);
+    canvas.drawCircle(c.translate(r * 0.22, r * 0.10), r * 0.10, crater);
+    canvas.drawCircle(c.translate(-r * 0.05, r * 0.34), r * 0.07, crater);
+    canvas.restore();
+
+    // Rim.
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.28)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
