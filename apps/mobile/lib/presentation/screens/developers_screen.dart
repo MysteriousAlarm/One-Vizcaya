@@ -3,49 +3,49 @@ import '../../core/constants/app_constants.dart';
 import '../state/municipality_state.dart';
 
 /// The people behind One Vizcaya. The Lead Developer is featured first, followed
-/// by the broader Project: Vizcaya Team organised by area of contribution.
+/// by the co-developers, each shown with their areas of contribution.
 class DevelopersScreen extends StatelessWidget {
   const DevelopersScreen({super.key});
 
-  // Lead Developer is highlighted on its own card above the team list.
-  static const String _leadName = 'Mysterious_Alarm';
-  static const String _leadRole = 'Lead Developer';
+  // Lead Developer — featured on its own card above the team list.
+  static const String _leadName = 'Aaron Anthony A. Gano II';
+  static const String _leadRole = 'Lead Developer · Front & Back-End';
+  static const String _leadSubtitle = 'Founder & Lead Developer of One Vizcaya';
+  static const List<String> _leadAreas = [
+    'Mobile App Development (Flutter)',
+    'UI / UX Design',
+    'Backend & Firebase Integration',
+    'Quality Assurance & Testing',
+    'Community & LGU / PLGU Coordination',
+  ];
 
-  // Areas of contribution under the Project: Vizcaya Team banner. Named
-  // co-developers are listed first, followed by the project's work areas.
-  static const List<Map<String, String>> _team = [
+  // Co-developers, each with their own areas of contribution.
+  static const List<Map<String, dynamic>> _team = [
     {
       'name': 'Sean Godric Reyes',
-      'role': 'Co-Developer',
+      'role': 'Co-Developer · Back-End',
+      'areas': [
+        'Mobile App Development',
+        'Backend & Firebase Integration',
+        'Database & Security',
+      ],
     },
     {
       'name': 'Darius Acosta',
-      'role': 'Co-Developer',
-    },
-    {
-      'name': 'Project: Vizcaya Team',
-      'role': 'Mobile App Development (Flutter)',
-    },
-    {
-      'name': 'Project: Vizcaya Team',
-      'role': 'UI / UX Design',
-    },
-    {
-      'name': 'Project: Vizcaya Team',
-      'role': 'Backend & Firebase Integration',
-    },
-    {
-      'name': 'Project: Vizcaya Team',
-      'role': 'Quality Assurance & Testing',
-    },
-    {
-      'name': 'Project: Vizcaya Team',
-      'role': 'Community & LGU Coordination',
+      'role': 'Head Relations Officer',
+      'areas': [
+        'Community & LGU / PLGU Coordination',
+      ],
     },
   ];
 
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
+  static String initials(String name) {
+    const suffixes = {'ii', 'iii', 'iv', 'v', 'jr', 'jr.', 'sr', 'sr.'};
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty && !suffixes.contains(p.toLowerCase()))
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) {
       return parts.first.characters.take(2).toString().toUpperCase();
@@ -57,6 +57,8 @@ class DevelopersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lguColor = oneVizcayaState.activeTheme['appBarColor'] as Color;
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -78,13 +80,7 @@ class DevelopersScreen extends StatelessWidget {
           Text(
             'One Vizcaya is built by the Project: Vizcaya Team for the citizens '
             'and Local Government Units of Nueva Vizcaya.',
-            style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.7)),
+            style: TextStyle(fontSize: 13, height: 1.45, color: muted),
           ),
           const SizedBox(height: 20),
 
@@ -103,57 +99,62 @@ class DevelopersScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: lguColor.withValues(alpha: 0.35)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: lguColor,
-                  child: Text(
-                    _initials(_leadName),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: lguColor,
+                      child: Text(
+                        initials(_leadName),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.star, size: 16, color: lguColor),
-                          const SizedBox(width: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.star, size: 16, color: lguColor),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _leadRole.toUpperCase(),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.6,
+                                      color: lguColor),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Text(
-                            _leadRole.toUpperCase(),
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.6,
-                                color: lguColor),
+                            _leadName,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _leadSubtitle,
+                            style: TextStyle(fontSize: 12.5, color: muted),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _leadName,
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Founder & Lead Developer of One Vizcaya',
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.7)),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 14),
+                _AreaChips(areas: _leadAreas, color: lguColor),
               ],
             ),
           ),
@@ -172,9 +173,10 @@ class DevelopersScreen extends StatelessWidget {
             ),
           ),
           ..._team.map((m) => _TeamTile(
-                name: m['name'] ?? '',
-                role: m['role'] ?? '',
-                initials: _initials(m['name'] ?? ''),
+                name: m['name'] as String,
+                role: m['role'] as String,
+                areas: List<String>.from(m['areas'] as List),
+                initials: initials(m['name'] as String),
                 color: lguColor,
               )),
 
@@ -198,46 +200,109 @@ class DevelopersScreen extends StatelessWidget {
   }
 }
 
+/// Small rounded chips listing a member's areas of contribution.
+class _AreaChips extends StatelessWidget {
+  final List<String> areas;
+  final Color color;
+
+  const _AreaChips({required this.areas, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: areas
+          .map((a) => Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  a,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ))
+          .toList(),
+    );
+  }
+}
+
 class _TeamTile extends StatelessWidget {
   final String name;
   final String role;
+  final List<String> areas;
   final String initials;
   final Color color;
 
   const _TeamTile({
     required this.name,
     required this.role,
+    required this.areas,
     required this.initials,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 22,
-          backgroundColor: color.withValues(alpha: 0.12),
-          child: Text(
-            initials,
-            style: TextStyle(
-                color: color, fontWeight: FontWeight.bold, fontSize: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: color.withValues(alpha: 0.12),
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      role,
+                      style: TextStyle(fontSize: 12.5, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-        title: Text(
-          name,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        ),
-        subtitle: Text(
-          role,
-          style: const TextStyle(fontSize: 12.5),
-        ),
+          if (areas.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _AreaChips(areas: areas, color: color),
+          ],
+        ],
       ),
     );
   }
