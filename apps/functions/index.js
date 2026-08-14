@@ -910,6 +910,107 @@ exports.fetchLinkPreview = onCall(async (request) => {
   };
 });
 
+// Municipality coordinates — mirror of the mobile WeatherService list, used by
+// the scheduled rainfall watch below.
+const NV_MUNICIPALITY_COORDS = {
+  Bambang: [16.3833, 121.0667],
+  Bayombong: [16.4833, 121.15],
+  Solano: [16.5167, 121.1833],
+  Aritao: [16.3, 121.0333],
+  Bagabag: [16.5833, 121.2333],
+  Villaverde: [16.65, 121.2667],
+  Diadi: [16.6, 121.3],
+  Quezon: [16.2333, 121.0167],
+  "Santa Fe": [16.1667, 120.9833],
+  Ambaguio: [16.2167, 121.1167],
+  Kasibu: [16.3167, 121.2667],
+  "Dupax del Norte": [16.5, 121.1],
+  "Dupax del Sur": [16.4667, 121.0833],
+  "Alfonso Castañeda": [16.1833, 121.2167],
+  Kayapa: [16.35, 120.9167],
+};
+
+/**
+ * Scheduled rainfall watch (PANaHON-style automatic weather alerts). Every 3
+ * hours it checks the short-term forecast for each municipality and, when
+ * meaningful rain is imminent, sends a push to that town's users via a broadcast
+ * (which onNewBroadcast delivers over FCM). A 6-hour per-municipality cooldown
+ * prevents spam.
+ *
+ * Requires the OPENWEATHER_API_KEY environment variable on the functions
+ * runtime (e.g. `firebase functions:secrets:set OPENWEATHER_API_KEY` or a
+ * .env entry). Without it the job logs a warning and no-ops — nothing breaks.
+ */
+exports.rainfallWatch = onSchedule(
+  { schedule: "0 */3 * * *", timeZone: "Asia/Manila" },
+  async () => {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      console.warn("rainfallWatch: OPENWEATHER_API_KEY not set — skipping.");
+      return;
+    }
+
+    const db = admin.firestore();
+    const now = Date.now();
+    const COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+    for (const [muni, [lat, lon]] of Object.entries(NV_MUNICIPALITY_COORDS)) {
+      try {
+        const alertRef = db.collection("weather_alerts").doc(muni);
+        const alertSnap = await alertRef.get();
+        const lastMs = alertSnap.exists ? alertSnap.data().lastAlertMs || 0 : 0;
+        if (now - lastMs < COOLDOWN_MS) continue;
+
+        const url =
+          "https://api.openweathermap.org/data/2.5/forecast" +
+          `?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=2`;
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const slots = data.list || [];
+        if (slots.length === 0) continue;
+
+        let maxPop = 0;
+        let totalRain = 0;
+        for (const s of slots) {
+          maxPop = Math.max(maxPop, s.pop || 0);
+          totalRain += (s.rain && s.rain["3h"]) || 0;
+        }
+
+        const heavy = totalRain >= 7.5; // mm over the window
+        const likely = maxPop >= 0.7 && totalRain >= 1.0;
+        if (!heavy && !likely) continue;
+
+        const title = heavy
+          ? `⛈ Heavy rain expected — ${muni}`
+          : `☔ Rain likely — ${muni}`;
+        const body =
+          `${Math.round(maxPop * 100)}% chance, about ` +
+          `${totalRain.toFixed(1)} mm in the next few hours. ` +
+          "Plan ahead and stay safe.";
+
+        await db.collection("broadcasts").add({
+          title,
+          body,
+          scope: muni,
+          type: "weather",
+          source: "rainfallWatch",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await alertRef.set(
+          { lastAlertMs: now, municipality: muni },
+          { merge: true }
+        );
+        console.log(
+          `rainfallWatch: alerted ${muni} (pop ${maxPop}, rain ${totalRain}).`
+        );
+      } catch (e) {
+        console.error(`rainfallWatch ${muni} error:`, e);
+      }
+    }
+  }
+);
+
 // ── RA 10173: storage cleanup helper ─────────────────────────────────────────
 // Derives the Storage object path from a Firebase download URL and deletes it.
 // Used to guarantee no orphaned photo evidence (with embedded EXIF/location)
