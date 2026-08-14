@@ -24,6 +24,7 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
   final _auth = FirebaseAuth.instance;
   bool _isAdmin = false;
   UserRole _userRole = UserRole.citizen;
+  String _residencyStatus = 'grandfathered';
   UserProfile? _profile;
   bool _isLoading = true;
 
@@ -68,14 +69,108 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
     UserProfile? profile = await profileService.getProfile(user.uid);
     profile ??= UserProfile(uid: user.uid, phoneNumber: user.phoneNumber ?? '');
 
+    // Residency status drives the verified badge + certification CTA.
+    String residency = 'grandfathered';
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      residency =
+          (doc.data()?['residencyStatus'] as String?) ?? 'grandfathered';
+    } catch (_) {}
+
     if (mounted) {
       setState(() {
         _userRole = role;
         _isAdmin = isAdmin;
         _profile = profile;
+        _residencyStatus = residency;
         _isLoading = false;
       });
     }
+  }
+
+  // Residency badge presentation, shared by the app-bar chip and the CTA.
+  ({String label, Color color, IconData icon}) get _residencyBadge {
+    switch (_residencyStatus) {
+      case 'certified':
+        return (
+          label: 'Certified NV Resident',
+          color: const Color(0xFF2E7D32),
+          icon: Icons.verified,
+        );
+      case 'gps_verified':
+        return (
+          label: 'Location Verified',
+          color: const Color(0xFF1565C0),
+          icon: Icons.location_on,
+        );
+      case 'unverified':
+        return (
+          label: 'Unverified',
+          color: const Color(0xFFE65100),
+          icon: Icons.error_outline,
+        );
+      default: // grandfathered
+        return (
+          label: 'Verified Account',
+          color: const Color(0xFF4CAF50),
+          icon: Icons.check_circle,
+        );
+    }
+  }
+
+  Widget _buildResidencyCta() {
+    final b = _residencyBadge;
+    final isUnverified = _residencyStatus == 'unverified';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.of(context).pushNamed('/verify-residency'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: b.color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: b.color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(b.icon, color: b.color, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isUnverified
+                          ? 'Verify your NV residency'
+                          : 'Get certified as an NV resident',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: b.color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isUnverified
+                          ? 'Required before you can submit reports.'
+                          : 'Report from anywhere once certified.',
+                      style: TextStyle(
+                          fontSize: 11.5, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: b.color, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // FEATURE 6: Load citizen report statistics
@@ -350,37 +445,40 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
                     icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  title: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_circle,
-                          color: Color(0xFF4CAF50),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _isAdmin
-                              ? _userRole.displayName
-                              : 'Verified Account',
-                          style: const TextStyle(
-                            color: Color(0xFF4CAF50),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                  title: Builder(builder: (context) {
+                    final b = _isAdmin
+                        ? (
+                            label: _userRole.displayName,
+                            color: const Color(0xFF4CAF50),
+                            icon: Icons.check_circle,
+                          )
+                        : _residencyBadge;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: b.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(b.icon, color: b.color, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            b.label,
+                            style: TextStyle(
+                              color: b.color,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  }),
                   actions: [
                     // ── QR Code Button — NOW WORKING ──
                     IconButton(
@@ -502,6 +600,14 @@ class _ProfileManagementScreenState extends State<ProfileManagementScreen> {
                               ),
                             ],
                           ),
+                        ],
+                        // Residency certification CTA (citizens who aren't yet
+                        // certified) — ties the profile to the verification flow.
+                        if (!_isAdmin &&
+                            (_residencyStatus == 'unverified' ||
+                                _residencyStatus == 'gps_verified')) ...[
+                          const SizedBox(height: 14),
+                          _buildResidencyCta(),
                         ],
                         const SizedBox(height: 16),
                         SizedBox(

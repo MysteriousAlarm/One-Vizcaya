@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Megaphone, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, Trash2, Megaphone, AlertTriangle, Loader2, Link2, Download } from "lucide-react";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,18 +35,56 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState("");
+  // Import-from-link (interim FB / news importer)
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  const resetForm = () => {
+    setTitle(""); setBody(""); setUrgent(false); setMunicipality("all");
+    setImportUrl(""); setSourceUrl(""); setImageUrl("");
+  };
+
+  const handleImport = async () => {
+    const url = importUrl.trim();
+    if (!url) return;
+    setImporting(true);
+    try {
+      const fn = httpsCallable<
+        { url: string },
+        { title: string; description: string; image: string; siteName: string; url: string }
+      >(functions, "fetchLinkPreview");
+      const { data } = await fn({ url });
+      if (data.title) setTitle(data.title.slice(0, 140));
+      if (data.description) setBody(data.description);
+      if (data.image) setImageUrl(data.image);
+      setSourceUrl(data.url || url);
+      toast({ title: "Imported — review before posting", variant: "success" as never });
+    } catch {
+      toast({ title: "Couldn't import that link", description: "Paste the text manually instead.", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handlePost = async () => {
     if (!title.trim() || !body.trim() || !user) return;
     setSaving(true);
     try {
-      await postAnnouncement({ title: title.trim(), body: body.trim(), urgent, municipality, postedBy: user.name });
+      await postAnnouncement({
+        title: title.trim(),
+        body: body.trim(),
+        urgent,
+        isUrgent: urgent,
+        municipality,
+        postedBy: user.name,
+        ...(sourceUrl ? { sourceUrl, sourceLabel: "View original post" } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+      });
       toast({ title: "Announcement posted", variant: "success" as never });
       setOpen(false);
-      setTitle("");
-      setBody("");
-      setUrgent(false);
-      setMunicipality("all");
+      resetForm();
     } catch {
       toast({ title: "Failed to post", variant: "destructive" });
     } finally {
@@ -118,12 +158,34 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Post Announcement</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {/* Interim importer: pull a public post's title/text/image so an
+                admin can review + publish without retyping. Nothing auto-posts. */}
+            <div className="space-y-1.5 rounded-lg border border-dashed p-2.5 bg-muted/30">
+              <Label className="text-xs flex items-center gap-1">
+                <Link2 className="h-3.5 w-3.5" /> Import from a link (Facebook / news)
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="Paste a public post URL…"
+                  className="text-xs"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={handleImport} disabled={importing || !importUrl.trim()}>
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <span className="ml-1 hidden sm:inline">Import</span>
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Pulls the title, text &amp; image for you to review — then Post. Nothing is auto-published.
+              </p>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">Title *</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" />
@@ -132,6 +194,14 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
               <Label className="text-xs">Message *</Label>
               <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={4} className="resize-none" />
             </div>
+            {imageUrl && (
+              <div className="space-y-1">
+                <img src={imageUrl} alt="Imported preview" className="rounded-md border w-full h-32 object-cover" />
+              </div>
+            )}
+            {sourceUrl && (
+              <p className="text-[10px] text-muted-foreground truncate">Source: {sourceUrl}</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Target</Label>

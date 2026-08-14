@@ -44,9 +44,21 @@ export function useAnnouncements() {
   return { announcements, loading };
 }
 
-export async function postAnnouncement(data: Omit<Announcement, "id" | "timestamp">) {
+export async function postAnnouncement(
+  data: Omit<Announcement, "id" | "timestamp"> & {
+    // Optional extras: mobile reads `isUrgent` (mirror of `urgent`) and shows
+    // the source link / image when present (e.g. imported from a FB post).
+    isUrgent?: boolean;
+    sourceUrl?: string;
+    sourceLabel?: string;
+    imageUrl?: string;
+  }
+) {
   await addDoc(collection(db, "announcements"), {
     ...data,
+    // Keep both keys in sync so the mobile app (which reads `isUrgent`)
+    // recognises urgency posted from the web (which used `urgent`).
+    isUrgent: data.isUrgent ?? data.urgent,
     timestamp: Timestamp.now(),
   });
 }

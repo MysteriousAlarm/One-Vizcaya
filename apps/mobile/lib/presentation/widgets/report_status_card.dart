@@ -13,6 +13,7 @@ import 'dart:io';
 import '../../domain/models/problem_report.dart';
 import '../../domain/enums/report_status.dart';
 import '../../core/utils/toast_utils.dart';
+import '../../core/utils/color_utils.dart';
 
 class ReportStatusCard extends StatefulWidget {
   final ProblemReport report;
@@ -658,6 +659,9 @@ class _ReportStatusCardState extends State<ReportStatusCard>
     final statusText = _getStatusText(widget.report.status);
     final statusIcon = _getStatusIcon(widget.report.status);
     final priorityColor = widget.report.priority.color;
+    // Contrast-adjusted municipality accent so a dark LGU colour stays legible
+    // as foreground text/icons on dark surfaces (dark mode).
+    final accent = ColorUtils.readableAccentOf(context, widget.lguColor);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
@@ -731,7 +735,7 @@ class _ReportStatusCardState extends State<ReportStatusCard>
                             .bodyLarge
                             ?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: widget.lguColor,
+                              color: accent,
                             ),
                       ),
                     ),
@@ -920,8 +924,8 @@ class _ReportStatusCardState extends State<ReportStatusCard>
                             style: TextStyle(fontSize: 12)),
                         onPressed: widget.report.id.isEmpty ? null : () => _showReportQr(context),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: widget.lguColor,
-                          side: BorderSide(color: widget.lguColor),
+                          foregroundColor: accent,
+                          side: BorderSide(color: accent),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
                           minimumSize: Size.zero,

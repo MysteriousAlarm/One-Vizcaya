@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_strings.dart';
 import '../state/municipality_state.dart';
 import '../../core/utils/toast_utils.dart';
+import '../../core/utils/color_utils.dart';
 
 class AnnouncementsScreen extends StatelessWidget {
   const AnnouncementsScreen({super.key});
@@ -92,6 +93,58 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
         : 'Saved to bookmarks');
   }
 
+  // Builds the announcement feed: urgent advisories pinned under an "Urgent"
+  // header, everything else under "Latest". Cards receive the contrast-safe
+  // accent so the municipality colour stays readable in dark mode.
+  List<Widget> _buildFeed(
+    List<QueryDocumentSnapshot> urgentDocs,
+    List<QueryDocumentSnapshot> regularDocs,
+    Color accent,
+  ) {
+    Widget cardFor(QueryDocumentSnapshot doc) {
+      return _AnnouncementCard(
+        data: doc.data() as Map<String, dynamic>,
+        docId: doc.id,
+        lguColor: accent,
+        isBookmarked: _bookmarkedIds.contains(doc.id),
+        onBookmarkToggle: () => _toggleBookmark(doc.id),
+      );
+    }
+
+    final feed = <Widget>[];
+    if (urgentDocs.isNotEmpty) {
+      feed.add(_groupHeader('Urgent Advisories', Colors.red.shade600,
+          icon: Icons.warning_amber_rounded));
+      feed.addAll(urgentDocs.map(cardFor));
+      if (regularDocs.isNotEmpty) {
+        feed.add(_groupHeader('Latest', accent, icon: Icons.campaign_outlined));
+      }
+    }
+    feed.addAll(regularDocs.map(cardFor));
+    return feed;
+  }
+
+  Widget _groupHeader(String label, Color color, {required IconData icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Stream<QuerySnapshot> _buildStream() {
     return FirebaseFirestore.instance
         .collection('announcements')
@@ -119,9 +172,11 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
     return StreamBuilder<QuerySnapshot>(
       stream: _buildStream(),
       builder: (context, snapshot) {
+        // Contrast-adjusted accent (Task 1) so the municipality colour stays
+        // legible for chips/icons/cards in dark mode.
+        final accent = ColorUtils.readableAccentOf(context, widget.lguColor);
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-              child: CircularProgressIndicator(color: widget.lguColor));
+          return Center(child: CircularProgressIndicator(color: accent));
         }
 
         if (snapshot.hasError) {
@@ -186,6 +241,17 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
         // The stream is newest-first; reverse for oldest-first.
         if (!_newestFirst) docs = docs.reversed.toList();
 
+        // Pin urgent advisories to the top so disaster/weather alerts surface
+        // first, regardless of the chosen sort order.
+        final urgentDocs = docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['isUrgent'] == true)
+            .toList();
+        final regularDocs = docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['isUrgent'] != true)
+            .toList();
+
         return RefreshIndicator(
           color: Colors.green,
           onRefresh: _onRefresh,
@@ -207,12 +273,11 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                         selected: !_showBookmarked,
                         onSelected: (_) =>
                             setState(() => _showBookmarked = false),
-                        selectedColor:
-                            widget.lguColor.withValues(alpha: 0.15),
-                        checkmarkColor: widget.lguColor,
+                        selectedColor: accent.withValues(alpha: 0.15),
+                        checkmarkColor: accent,
                         labelStyle: TextStyle(
                           color: !_showBookmarked
-                              ? widget.lguColor
+                              ? accent
                               : Colors.grey.shade600,
                           fontWeight: !_showBookmarked
                               ? FontWeight.w600
@@ -253,17 +318,16 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                               ? Icons.arrow_downward
                               : Icons.arrow_upward,
                           size: 16,
-                          color: widget.lguColor,
+                          color: accent,
                         ),
                         label: Text(_newestFirst ? 'Newest' : 'Oldest'),
                         labelStyle: TextStyle(
-                          color: widget.lguColor,
+                          color: accent,
                           fontWeight: FontWeight.w600,
                         ),
                         side: BorderSide(
-                            color: widget.lguColor.withValues(alpha: 0.4)),
-                        backgroundColor:
-                            widget.lguColor.withValues(alpha: 0.06),
+                            color: accent.withValues(alpha: 0.4)),
+                        backgroundColor: accent.withValues(alpha: 0.06),
                         onPressed: () =>
                             setState(() => _newestFirst = !_newestFirst),
                       ),
@@ -279,7 +343,7 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                                 Icon(Icons.done,
                                     size: 16,
                                     color: activeAgency == null
-                                        ? widget.lguColor
+                                        ? accent
                                         : Colors.transparent),
                                 const SizedBox(width: 8),
                                 const Text('All Agencies'),
@@ -293,7 +357,7 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                                     Icon(Icons.done,
                                         size: 16,
                                         color: activeAgency == a
-                                            ? widget.lguColor
+                                            ? accent
                                             : Colors.transparent),
                                     const SizedBox(width: 8),
                                     Flexible(child: Text(a)),
@@ -303,7 +367,7 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                         ],
                         child: Chip(
                           avatar: Icon(Icons.apartment,
-                              size: 16, color: widget.lguColor),
+                              size: 16, color: accent),
                           label: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -320,7 +384,7 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                           labelStyle: TextStyle(
                             color: activeAgency == null
                                 ? Colors.grey.shade600
-                                : widget.lguColor,
+                                : accent,
                             fontWeight: activeAgency == null
                                 ? FontWeight.normal
                                 : FontWeight.w600,
@@ -328,10 +392,10 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                           side: BorderSide(
                               color: activeAgency == null
                                   ? Colors.grey.shade300
-                                  : widget.lguColor.withValues(alpha: 0.4)),
+                                  : accent.withValues(alpha: 0.4)),
                           backgroundColor: activeAgency == null
                               ? null
-                              : widget.lguColor.withValues(alpha: 0.06),
+                              : accent.withValues(alpha: 0.06),
                         ),
                       ),
                     ],
@@ -355,7 +419,7 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                             size: _showBookmarked ? 56 : 64,
                             color: _showBookmarked
                                 ? Colors.grey.shade300
-                                : widget.lguColor.withValues(alpha: 0.3),
+                                : accent.withValues(alpha: 0.3),
                             semanticLabel: _showBookmarked
                                 ? 'No bookmarks'
                                 : 'No announcements',
@@ -398,22 +462,8 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
                     MediaQuery.of(context).padding.bottom + 16,
                   ),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final doc = docs[index];
-                        final data =
-                            doc.data() as Map<String, dynamic>;
-                        return _AnnouncementCard(
-                          data: data,
-                          docId: doc.id,
-                          lguColor: widget.lguColor,
-                          isBookmarked:
-                              _bookmarkedIds.contains(doc.id),
-                          onBookmarkToggle: () =>
-                              _toggleBookmark(doc.id),
-                        );
-                      },
-                      childCount: docs.length,
+                    delegate: SliverChildListDelegate(
+                      _buildFeed(urgentDocs, regularDocs, accent),
                     ),
                   ),
                 ),

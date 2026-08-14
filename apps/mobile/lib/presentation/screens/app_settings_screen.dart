@@ -360,7 +360,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   icon: Icons.groups_outlined,
                   iconColor: _lguColor,
                   title: 'Developers',
-                  subtitle: 'Mysterious_Alarm — Lead Developer',
+                  subtitle: 'Aaron Anthony A. Gano II — Lead Developer',
                   onTap: () => Navigator.of(context).pushNamed('/developers'),
                 ),
                 _DividerLine(),

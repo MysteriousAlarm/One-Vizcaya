@@ -776,6 +776,241 @@ exports.onNewBroadcast = onDocumentCreated(
   }
 );
 
+/**
+ * Sends a push notification when a new announcement is posted, so citizens are
+ * alerted the same way they are for report updates and broadcasts. Targets the
+ * announcement's municipality (or every user when municipality == "All").
+ * The announcement itself is the record — the mobile inbox reads it directly,
+ * so no per-user notification documents are fanned out here.
+ */
+exports.onNewAnnouncement = onDocumentCreated(
+  "announcements/{announcementId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const title = data.title;
+    const body = data.body;
+    const municipality = data.municipality || "All";
+    if (!title) return;
+
+    const db = admin.firestore();
+
+    // "All" → every user with a token; otherwise only that municipality's users.
+    const query =
+      municipality === "All"
+        ? db.collection("users").where("fcmToken", "!=", null)
+        : db.collection("users").where("municipality", "==", municipality);
+
+    const usersSnap = await query.get();
+    if (usersSnap.empty) return;
+
+    const tokens = usersSnap.docs.map((d) => d.data().fcmToken).filter(Boolean);
+    if (tokens.length === 0) return;
+
+    const isUrgent = data.isUrgent === true;
+    const pushTitle = isUrgent ? `⚠ ${title}` : title;
+    const pushBody = (body || "").slice(0, 240);
+
+    for (let i = 0; i < tokens.length; i += 500) {
+      const batch = tokens.slice(i, i + 500);
+      await admin
+        .messaging()
+        .sendEachForMulticast({
+          tokens: batch,
+          notification: { title: pushTitle, body: pushBody },
+          android: {
+            notification: {
+              channelId: "one_vizcaya_broadcasts",
+              priority: "high",
+              color: isUrgent ? "#D32F2F" : "#1B5E20",
+            },
+          },
+          data: {
+            type: "announcement",
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        })
+        .catch((e) => console.error("Announcement FCM batch failed:", e));
+    }
+  }
+);
+
+/**
+ * Interim "Import from link" helper for announcements. Given a public post URL
+ * (e.g. the Governor's Office Facebook page, a news site, or a gov advisory),
+ * fetches the page server-side (avoids browser CORS) and returns its Open Graph
+ * metadata so an admin can review and publish it as an announcement with one
+ * click — no manual retyping. This does NOT auto-post; a human still confirms.
+ *
+ * NOTE: this reads a page's public preview tags (the same thing a link preview
+ * in Messenger/Viber does). The full Graph-API integration that auto-syncs an
+ * official Page comes later, once the project has an approved government
+ * contract and Page access.
+ */
+exports.fetchLinkPreview = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in required.");
+  }
+  const url = String(request.data?.url || "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    throw new HttpsError("invalid-argument", "Enter a valid http(s) link.");
+  }
+
+  let html = "";
+  try {
+    const resp = await fetch(url, {
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; OneVizcayaBot/1.0; +https://nuevavizcaya.gov.ph)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    html = await resp.text();
+  } catch (e) {
+    console.error("fetchLinkPreview error:", e);
+    throw new HttpsError("unavailable", "Could not fetch that link.");
+  }
+
+  const decode = (s) =>
+    (s || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;|&apos;/gi, "'")
+      .replace(/&#x27;/gi, "'")
+      .trim();
+
+  const meta = (prop) => {
+    const a = new RegExp(
+      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`,
+      "i"
+    );
+    const b = new RegExp(
+      `<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`,
+      "i"
+    );
+    const m = html.match(a) || html.match(b);
+    return m ? decode(m[1]) : "";
+  };
+
+  const titleTag = () => {
+    const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    return m ? decode(m[1]) : "";
+  };
+
+  return {
+    title: meta("og:title") || titleTag(),
+    description: meta("og:description") || meta("description"),
+    image: meta("og:image") || meta("og:image:url"),
+    siteName: meta("og:site_name"),
+    url: meta("og:url") || url,
+  };
+});
+
+// Municipality coordinates — mirror of the mobile WeatherService list, used by
+// the scheduled rainfall watch below.
+const NV_MUNICIPALITY_COORDS = {
+  Bambang: [16.3833, 121.0667],
+  Bayombong: [16.4833, 121.15],
+  Solano: [16.5167, 121.1833],
+  Aritao: [16.3, 121.0333],
+  Bagabag: [16.5833, 121.2333],
+  Villaverde: [16.65, 121.2667],
+  Diadi: [16.6, 121.3],
+  Quezon: [16.2333, 121.0167],
+  "Santa Fe": [16.1667, 120.9833],
+  Ambaguio: [16.2167, 121.1167],
+  Kasibu: [16.3167, 121.2667],
+  "Dupax del Norte": [16.5, 121.1],
+  "Dupax del Sur": [16.4667, 121.0833],
+  "Alfonso Castañeda": [16.1833, 121.2167],
+  Kayapa: [16.35, 120.9167],
+};
+
+/**
+ * Scheduled rainfall watch (PANaHON-style automatic weather alerts). Every 3
+ * hours it checks the short-term forecast for each municipality and, when
+ * meaningful rain is imminent, sends a push to that town's users via a broadcast
+ * (which onNewBroadcast delivers over FCM). A 6-hour per-municipality cooldown
+ * prevents spam.
+ *
+ * Requires the OPENWEATHER_API_KEY environment variable on the functions
+ * runtime (e.g. `firebase functions:secrets:set OPENWEATHER_API_KEY` or a
+ * .env entry). Without it the job logs a warning and no-ops — nothing breaks.
+ */
+exports.rainfallWatch = onSchedule(
+  { schedule: "0 */3 * * *", timeZone: "Asia/Manila" },
+  async () => {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      console.warn("rainfallWatch: OPENWEATHER_API_KEY not set — skipping.");
+      return;
+    }
+
+    const db = admin.firestore();
+    const now = Date.now();
+    const COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+    for (const [muni, [lat, lon]] of Object.entries(NV_MUNICIPALITY_COORDS)) {
+      try {
+        const alertRef = db.collection("weather_alerts").doc(muni);
+        const alertSnap = await alertRef.get();
+        const lastMs = alertSnap.exists ? alertSnap.data().lastAlertMs || 0 : 0;
+        if (now - lastMs < COOLDOWN_MS) continue;
+
+        const url =
+          "https://api.openweathermap.org/data/2.5/forecast" +
+          `?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=2`;
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const slots = data.list || [];
+        if (slots.length === 0) continue;
+
+        let maxPop = 0;
+        let totalRain = 0;
+        for (const s of slots) {
+          maxPop = Math.max(maxPop, s.pop || 0);
+          totalRain += (s.rain && s.rain["3h"]) || 0;
+        }
+
+        const heavy = totalRain >= 7.5; // mm over the window
+        const likely = maxPop >= 0.7 && totalRain >= 1.0;
+        if (!heavy && !likely) continue;
+
+        const title = heavy
+          ? `⛈ Heavy rain expected — ${muni}`
+          : `☔ Rain likely — ${muni}`;
+        const body =
+          `${Math.round(maxPop * 100)}% chance, about ` +
+          `${totalRain.toFixed(1)} mm in the next few hours. ` +
+          "Plan ahead and stay safe.";
+
+        await db.collection("broadcasts").add({
+          title,
+          body,
+          scope: muni,
+          type: "weather",
+          source: "rainfallWatch",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await alertRef.set(
+          { lastAlertMs: now, municipality: muni },
+          { merge: true }
+        );
+        console.log(
+          `rainfallWatch: alerted ${muni} (pop ${maxPop}, rain ${totalRain}).`
+        );
+      } catch (e) {
+        console.error(`rainfallWatch ${muni} error:`, e);
+      }
+    }
+  }
+);
+
 // ── RA 10173: storage cleanup helper ─────────────────────────────────────────
 // Derives the Storage object path from a Firebase download URL and deletes it.
 // Used to guarantee no orphaned photo evidence (with embedded EXIF/location)

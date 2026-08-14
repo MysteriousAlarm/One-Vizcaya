@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'; // Added for kIsWeb and kReleaseMode
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:app_links/app_links.dart';
 import 'firebase_options.dart';
@@ -49,6 +50,21 @@ void main() async {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
     );
+    // Sideloaded builds can never pass Play Integrity (only Play-distributed
+    // apps can), so phone sign-in falls back to reCAPTCHA — but the failing
+    // Play Integrity attempt first can poison that flow. Building with
+    //   flutter build apk --release --dart-define=FORCE_RECAPTCHA=true
+    // forces the reCAPTCHA web flow directly, which DOES work on a sideloaded
+    // APK (SHA-1 must be registered). Omit the flag for Play Store builds so
+    // they use the smoother Play Integrity path.
+    if (!kIsWeb &&
+        const bool.fromEnvironment('FORCE_RECAPTCHA', defaultValue: false)) {
+      try {
+        await FirebaseAuth.instance.setSettings(forceRecaptchaFlow: true);
+      } catch (e) {
+        debugPrint('forceRecaptchaFlow setting error: $e');
+      }
+    }
   } catch (e) {
     debugPrint('Firebase core init error: $e');
   }
@@ -388,6 +404,66 @@ ThemeData _buildDarkTheme() {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
       ),
+    ),
+    // ── Whole-app dark-mode coverage ──────────────────────────────────────────
+    // Explicitly theme the remaining component types so nothing falls back to a
+    // mismatched Material default surface in dark mode.
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: accent,
+        side: const BorderSide(color: divider),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: accent),
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: accent,
+      foregroundColor: Color(0xFF06210A),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(color: accent),
+    chipTheme: ChipThemeData(
+      backgroundColor: surfaceHigh,
+      selectedColor: accent.withValues(alpha: 0.25),
+      disabledColor: surface,
+      labelStyle: const TextStyle(color: textPrimary),
+      secondaryLabelStyle: const TextStyle(color: textPrimary),
+      side: const BorderSide(color: divider),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: surface,
+      surfaceTintColor: Colors.transparent,
+      textStyle: const TextStyle(color: textPrimary),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+    ),
+    snackBarTheme: const SnackBarThemeData(
+      backgroundColor: surfaceHigh,
+      contentTextStyle: TextStyle(color: textPrimary),
+      actionTextColor: accent,
+      behavior: SnackBarBehavior.floating,
+    ),
+    tooltipTheme: const TooltipThemeData(
+      decoration: BoxDecoration(
+        color: surfaceHigh,
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+      ),
+      textStyle: TextStyle(color: textPrimary, fontSize: 12),
+    ),
+    expansionTileTheme: const ExpansionTileThemeData(
+      iconColor: accent,
+      collapsedIconColor: textSecondary,
+      textColor: textPrimary,
+      collapsedTextColor: textPrimary,
+    ),
+    tabBarTheme: const TabBarThemeData(
+      labelColor: accent,
+      unselectedLabelColor: textSecondary,
+      indicatorColor: accent,
     ),
   );
 }

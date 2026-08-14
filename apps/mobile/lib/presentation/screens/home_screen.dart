@@ -14,6 +14,7 @@ import '../../features/reports/presentation/widgets/community_feed.dart';
 import '../../core/widgets/weather_widget.dart';
 import '../../data/services/offline_queue_service.dart';
 import '../widgets/municipality_info_sheet.dart';
+import '../widgets/notification_bell.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -353,14 +354,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.notifications_outlined,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                        size: 22,
-                      ),
-                      onPressed: () =>
-                          Navigator.of(context).pushNamed('/notifications'),
+                    child: NotificationBell(
+                      iconColor:
+                          Theme.of(context).textTheme.bodyLarge?.color ??
+                              Colors.grey,
                     ),
                   ),
                 ),
