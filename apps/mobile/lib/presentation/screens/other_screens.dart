@@ -386,7 +386,7 @@ class _SupportScreenState extends State<SupportScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Developed by Mysterious_Alarm\nNueva Vizcaya State University',
+                    'Developed by Aaron Anthony A. Gano II\nNueva Vizcaya State University',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,

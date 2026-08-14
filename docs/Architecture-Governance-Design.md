@@ -275,5 +275,5 @@ for.
 
 ---
 
-*Project: Vizcaya Team — Mysterious_Alarm · Reyes · Acosta —
+*Project: Vizcaya Team — Aaron Anthony A. Gano II · Reyes · Acosta —
 [github.com/Project-Vizcaya/One-Vizcaya](https://github.com/Project-Vizcaya/One-Vizcaya)*
