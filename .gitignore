@@ -70,3 +70,6 @@ apps/mobile/lib/secrets.dart
 # ── Geojson (large, excluded from repo) ────────────────────────────────────────
 nueva_vizcaya_municipalities.geojson
 apps/mobile/assets/nueva_vizcaya_municipalities.geojson
+
+# Website-hosted app binary (drop the built APK here; not tracked)
+apps/web/public/downloads/*.apk
