@@ -1119,84 +1119,89 @@ exports.seedResponders = onCall(async (request) => {
     { name: "NDRRMC Operations Center",    phone: "02-8911-5061",   type: "disaster",       municipality: "All" },
     { name: "NDRRMC Hotline",              phone: "09178990098",    type: "disaster",       municipality: "All" },
     { name: "DPWH – Region II Hotline",    phone: "078-396-0796",   type: "infrastructure", municipality: "All" },
-    { name: "DPWH Nueva Vizcaya DEO",      phone: "09175000100",    type: "infrastructure", municipality: "All" },
+    { name: "DPWH Nueva Vizcaya DEO",      phone: "09175000100 #",    type: "infrastructure", municipality: "All" },
     { name: "PDRRMO Nueva Vizcaya",        phone: "09171227150",    type: "disaster",       municipality: "All" },
   ];
 
-  // Municipality-specific responders
-  // PNP numbers — verified from official LGU records
-  // BFP numbers — UNVERIFIED (placeholder pattern); confirm with municipal BFP before use
-  // Hospital and MDRRMO numbers — verified from official records
+  // Municipality-specific responders.
+  // CONVENTION: a phone ending in " #" is a PLACEHOLDER / unverified number —
+  // it must be confirmed with the office before use, and the trailing "#" makes
+  // it non-dialable so it fails safe (never calls a random stranger). Numbers
+  // without "#" are verified.
+  //   PNP     — verified from official LGU records
+  //   MDRRMO  — verified from the official PDRRMO Nueva Vizcaya hotline poster
+  //   BFP     — mostly UNVERIFIED placeholders (marked "#"); confirm per station
+  //   Hospital— NV Provincial Hospital verified; a reused number is marked "#"
   const localResponders = [
     // Alfonso Castañeda
     { name: "PNP Alfonso Castañeda",  phone: "09193262160", type: "police",  municipality: "Alfonso Castañeda", verified: true },
-    { name: "BFP Alfonso Castañeda",  phone: "09171112222", type: "fire",    municipality: "Alfonso Castañeda", verified: false },
-    { name: "MDRRMO / PDRRMO",        phone: "09171227150", type: "disaster",municipality: "Alfonso Castañeda", verified: true },
+    { name: "BFP Alfonso Castañeda",  phone: "09171112222 #", type: "fire",    municipality: "Alfonso Castañeda", verified: false },
+    { name: "MDRRMO / PDRRMO",        phone: "09702410684", type: "disaster",municipality: "Alfonso Castañeda", verified: true },
 
     // Ambaguio
     { name: "PNP Ambaguio",           phone: "09061675646", type: "police",  municipality: "Ambaguio", verified: true },
-    { name: "BFP Ambaguio",           phone: "09171113333", type: "fire",    municipality: "Ambaguio", verified: false },
-    { name: "MDRRMO / PDRRMO",        phone: "09171227150", type: "disaster",municipality: "Ambaguio", verified: true },
+    { name: "BFP Ambaguio",           phone: "09171113333 #", type: "fire",    municipality: "Ambaguio", verified: false },
+    { name: "MDRRMO / PDRRMO",        phone: "09650469390", type: "disaster",municipality: "Ambaguio", verified: true },
 
     // Aritao
     { name: "PNP Aritao",             phone: "09164956244", type: "police",  municipality: "Aritao", verified: true },
-    { name: "BFP Aritao",             phone: "09171114444", type: "fire",    municipality: "Aritao", verified: false },
-    { name: "MDRRMO Aritao",          phone: "09171227150", type: "disaster",municipality: "Aritao", verified: true },
+    { name: "BFP Aritao",             phone: "09171114444 #", type: "fire",    municipality: "Aritao", verified: false },
+    { name: "MDRRMO Aritao",          phone: "09979722741", type: "disaster",municipality: "Aritao", verified: true },
 
     // Bagabag
     { name: "PNP Bagabag",            phone: "09175063958", type: "police",  municipality: "Bagabag", verified: true },
-    { name: "BFP Bagabag",            phone: "09171115555", type: "fire",    municipality: "Bagabag", verified: false },
-    { name: "MDRRMO Bagabag",         phone: "09171227150", type: "disaster",municipality: "Bagabag", verified: true },
+    { name: "BFP Bagabag",            phone: "09171115555 #", type: "fire",    municipality: "Bagabag", verified: false },
+    { name: "MDRRMO Bagabag",         phone: "09266324196", type: "disaster",municipality: "Bagabag", verified: true },
 
     // Bambang
     { name: "PNP Bambang",            phone: "09065630944", type: "police",  municipality: "Bambang", verified: true },
     { name: "BFP Bambang",            phone: "09175444946", type: "fire",    municipality: "Bambang", verified: true },
     { name: "NV Provincial Hospital", phone: "09228680843", type: "medical", municipality: "Bambang", verified: true },
-    { name: "MDRRMO Bambang",         phone: "09175861838", type: "disaster",municipality: "Bambang", verified: true },
+    { name: "MDRRMO Bambang",         phone: "09560193138", type: "disaster",municipality: "Bambang", verified: true },
 
     // Bayombong
     { name: "PNP Bayombong",                phone: "09153116455", type: "police",  municipality: "Bayombong", verified: true },
-    { name: "BFP Bayombong",                phone: "09187654321", type: "fire",    municipality: "Bayombong", verified: false },
+    { name: "BFP Bayombong",                phone: "09187654321 #", type: "fire",    municipality: "Bayombong", verified: false },
     { name: "Nueva Vizcaya Prov. Hospital", phone: "09228680843", type: "medical", municipality: "Bayombong", verified: true },
-    { name: "PDRRMO Nueva Vizcaya",         phone: "09171227150", type: "disaster",municipality: "Bayombong", verified: true },
+    { name: "PDRRMO Nueva Vizcaya",         phone: "09176584579", type: "disaster",municipality: "Bayombong", verified: true },
 
     // Diadi
     { name: "PNP Diadi",              phone: "09989673133", type: "police",  municipality: "Diadi", verified: true },
-    { name: "BFP Diadi",              phone: "09171116666", type: "fire",    municipality: "Diadi", verified: false },
-    { name: "Diadi Emergency Hospital",phone: "09228680843", type: "medical", municipality: "Diadi", verified: true },
-    { name: "MDRRMO / PDRRMO",        phone: "09171227150", type: "disaster",municipality: "Diadi", verified: true },
+    { name: "BFP Diadi",              phone: "09171116666 #", type: "fire",    municipality: "Diadi", verified: false },
+    { name: "Diadi Emergency Hospital",phone: "09228680843 #", type: "medical", municipality: "Diadi", verified: true },
+    { name: "MDRRMO / PDRRMO",        phone: "09161258875", type: "disaster",municipality: "Diadi", verified: true },
 
     // Dupax del Norte
     { name: "PNP Dupax del Norte",    phone: "09989673134", type: "police",  municipality: "Dupax del Norte", verified: true },
-    { name: "BFP Dupax del Norte",    phone: "09171117777", type: "fire",    municipality: "Dupax del Norte", verified: false },
+    { name: "BFP Dupax del Norte",    phone: "09171117777 #", type: "fire",    municipality: "Dupax del Norte", verified: false },
     { name: "Dupax District Hospital",phone: "0788081178",  type: "medical", municipality: "Dupax del Norte", verified: true },
-    { name: "MDRRMO / PDRRMO",        phone: "09171227150", type: "disaster",municipality: "Dupax del Norte", verified: true },
+    { name: "MDRRMO / PDRRMO",        phone: "09176589565", type: "disaster",municipality: "Dupax del Norte", verified: true },
 
     // Dupax del Sur
     { name: "PNP Dupax del Sur",      phone: "09989673135", type: "police",  municipality: "Dupax del Sur", verified: true },
-    { name: "BFP Dupax del Sur",      phone: "09171118888", type: "fire",    municipality: "Dupax del Sur", verified: false },
-    { name: "MDRRMO / PDRRMO",        phone: "09171227150", type: "disaster",municipality: "Dupax del Sur", verified: true },
+    { name: "BFP Dupax del Sur",      phone: "09171118888 #", type: "fire",    municipality: "Dupax del Sur", verified: false },
+    { name: "MDRRMO / PDRRMO",        phone: "09175927920", type: "disaster",municipality: "Dupax del Sur", verified: true },
 
     // Kasibu
     { name: "PNP Kasibu",             phone: "09055889533", type: "police",  municipality: "Kasibu", verified: true },
-    { name: "BFP Kasibu",             phone: "09171119999", type: "fire",    municipality: "Kasibu", verified: false },
+    { name: "BFP Kasibu",             phone: "09171119999 #", type: "fire",    municipality: "Kasibu", verified: false },
     { name: "Kasibu Municipal Hospital",phone: "09273659546", type: "medical", municipality: "Kasibu", verified: true },
-    { name: "MDRRMO Kasibu",          phone: "09171227150", type: "disaster",municipality: "Kasibu", verified: true },
+    { name: "MDRRMO Kasibu",          phone: "09777785675", type: "disaster",municipality: "Kasibu", verified: true },
 
     // Kayapa
     { name: "PNP Kayapa",             phone: "09175168649", type: "police",  municipality: "Kayapa", verified: true },
-    { name: "BFP Kayapa",             phone: "09172221111", type: "fire",    municipality: "Kayapa", verified: false },
-    { name: "MDRRMO Kayapa",          phone: "09171227150", type: "disaster",municipality: "Kayapa", verified: true },
+    { name: "BFP Kayapa",             phone: "09172221111 #", type: "fire",    municipality: "Kayapa", verified: false },
+    { name: "MDRRMO Kayapa",          phone: "09164946926", type: "disaster",municipality: "Kayapa", verified: true },
 
     // Quezon
     { name: "PNP Quezon",             phone: "09351346735", type: "police",  municipality: "Quezon", verified: true },
-    { name: "BFP Quezon",             phone: "09172223333", type: "fire",    municipality: "Quezon", verified: false },
-    { name: "MDRRMO Quezon",          phone: "09171227150", type: "disaster",municipality: "Quezon", verified: true },
+    { name: "BFP Quezon",             phone: "09172223333 #", type: "fire",    municipality: "Quezon", verified: false },
+    { name: "MDRRMO Quezon",          phone: "09068606785", type: "disaster",municipality: "Quezon", verified: true },
 
     // Santa Fe
     { name: "PNP Santa Fe",           phone: "09164625062", type: "police",  municipality: "Santa Fe", verified: true },
-    { name: "BFP Santa Fe",           phone: "09172224444", type: "fire",    municipality: "Santa Fe", verified: false },
-    { name: "MDRRMO Santa Fe",        phone: "09171227150", type: "disaster",municipality: "Santa Fe", verified: true },
+    { name: "BFP Santa Fe",           phone: "09172224444 #", type: "fire",    municipality: "Santa Fe", verified: false },
+    { name: "MDRRMO Santa Fe",        phone: "09562465185", type: "disaster",municipality: "Santa Fe", verified: true },
 
     // Solano
     { name: "PNP Solano",             phone: "09274008033", type: "police",  municipality: "Solano", verified: true },
@@ -1206,8 +1211,8 @@ exports.seedResponders = onCall(async (request) => {
 
     // Villaverde
     { name: "PNP Villaverde",         phone: "09062683761", type: "police",  municipality: "Villaverde", verified: true },
-    { name: "BFP Villaverde",         phone: "09172225555", type: "fire",    municipality: "Villaverde", verified: false },
-    { name: "MDRRMO Villaverde",      phone: "09171227150", type: "disaster",municipality: "Villaverde", verified: true },
+    { name: "BFP Villaverde",         phone: "09172225555 #", type: "fire",    municipality: "Villaverde", verified: false },
+    { name: "MDRRMO Villaverde",      phone: "09178067038", type: "disaster",municipality: "Villaverde", verified: true },
   ];
 
   const allResponders = [...nationalContacts.map(r => ({ ...r, verified: true })), ...localResponders];
