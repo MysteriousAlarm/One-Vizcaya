@@ -10,21 +10,13 @@ class EmergencyContactsScreen extends StatelessWidget {
 
   // National hotlines shown for every municipality
   static const List<Map<String, String>> _nationalHotlines = [
-    {
-      'name': 'National Emergency Hotline',
-      'number': '911',
-      'type': 'general',
-    },
+    {'name': 'National Emergency Hotline', 'number': '911', 'type': 'general'},
     {
       'name': 'NDRRMC Operations Center',
       'number': '02-8911-5061',
       'type': 'disaster',
     },
-    {
-      'name': 'NDRRMC Hotline',
-      'number': '09178990098',
-      'type': 'disaster',
-    },
+    {'name': 'NDRRMC Hotline', 'number': '09178990098', 'type': 'disaster'},
     {
       'name': 'DPWH – Region II Hotline',
       'number': '078-396-0796',
@@ -72,11 +64,7 @@ class EmergencyContactsScreen extends StatelessWidget {
       'number': '09197777377',
       'type': 'women',
     },
-    {
-      'name': 'DSWD Hotline',
-      'number': '16545',
-      'type': 'women',
-    },
+    {'name': 'DSWD Hotline', 'number': '16545', 'type': 'women'},
     {
       'name': 'Bantay Bata 163 (Child Protection)',
       'number': '163',
@@ -88,16 +76,8 @@ class EmergencyContactsScreen extends StatelessWidget {
       'type': 'women',
     },
     // ── Health services ──
-    {
-      'name': 'DOH Hotline',
-      'number': '1555',
-      'type': 'medical',
-    },
-    {
-      'name': 'PhilHealth Hotline',
-      'number': '02-8441-7442',
-      'type': 'medical',
-    },
+    {'name': 'DOH Hotline', 'number': '1555', 'type': 'medical'},
+    {'name': 'PhilHealth Hotline', 'number': '02-8441-7442', 'type': 'medical'},
     // ── Government & citizen services ──
     {
       'name': '8888 Citizens\' Complaint Hotline',
@@ -109,11 +89,7 @@ class EmergencyContactsScreen extends StatelessWidget {
       'number': '1349',
       'type': 'gov',
     },
-    {
-      'name': 'DTI Consumer Hotline',
-      'number': '1384',
-      'type': 'gov',
-    },
+    {'name': 'DTI Consumer Hotline', 'number': '1384', 'type': 'gov'},
     // ── Cybercrime & anti-illegal drugs ──
     {
       'name': 'PNP Anti-Cybercrime Group',
@@ -125,37 +101,21 @@ class EmergencyContactsScreen extends StatelessWidget {
       'number': '09178927362',
       'type': 'police',
     },
-    {
-      'name': 'NBI Hotline',
-      'number': '02-8523-8231',
-      'type': 'police',
-    },
+    {'name': 'NBI Hotline', 'number': '02-8523-8231', 'type': 'police'},
     // ── Humanitarian & utilities ──
-    {
-      'name': 'Philippine Red Cross',
-      'number': '143',
-      'type': 'redcross',
-    },
+    {'name': 'Philippine Red Cross', 'number': '143', 'type': 'redcross'},
     {
       'name': 'PHIVOLCS (Earthquake/Volcano)',
       'number': '02-8929-9254',
       'type': 'disaster',
     },
-    {
-      'name': 'PAGASA Weather',
-      'number': '02-8284-0800',
-      'type': 'disaster',
-    },
+    {'name': 'PAGASA Weather', 'number': '02-8284-0800', 'type': 'disaster'},
     {
       'name': 'Bureau of Fire Protection (National)',
       'number': '02-8426-0219',
       'type': 'fire',
     },
-    {
-      'name': 'PNP Text Hotline',
-      'number': '0917-847-5757',
-      'type': 'police',
-    },
+    {'name': 'PNP Text Hotline', 'number': '0917-847-5757', 'type': 'police'},
     {
       'name': 'Land Transportation Office (LTO)',
       'number': '1342',
@@ -165,74 +125,110 @@ class EmergencyContactsScreen extends StatelessWidget {
 
   static const Map<String, List<Map<String, String>>> _localContacts = {
     'Alfonso Castañeda': [
-      {'name': 'PNP Alfonso Castañeda', 'number': '09193262160', 'type': 'police'},
-      {'name': 'BFP Alfonso Castañeda', 'number': '09171112222', 'type': 'fire'},
-      {'name': 'MDRRMO / PDRRMO', 'number': '09171227150', 'type': 'disaster'},
+      {
+        'name': 'PNP Alfonso Castañeda',
+        'number': '09193262160',
+        'type': 'police',
+      },
+      {
+        'name': 'BFP Alfonso Castañeda',
+        'number': '09171112222',
+        'type': 'fire',
+      },
+      {'name': 'MDRRMO / PDRRMO', 'number': '09702410684', 'type': 'disaster'},
     ],
     'Ambaguio': [
       {'name': 'PNP Ambaguio', 'number': '09061675646', 'type': 'police'},
       {'name': 'BFP Ambaguio', 'number': '09171113333', 'type': 'fire'},
-      {'name': 'MDRRMO / PDRRMO', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO / PDRRMO', 'number': '09650469390', 'type': 'disaster'},
     ],
     'Aritao': [
       {'name': 'PNP Aritao', 'number': '09164956244', 'type': 'police'},
       {'name': 'BFP Aritao', 'number': '09171114444', 'type': 'fire'},
-      {'name': 'MDRRMO Aritao', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO Aritao', 'number': '09979722741', 'type': 'disaster'},
     ],
     'Bagabag': [
       {'name': 'PNP Bagabag', 'number': '09175063958', 'type': 'police'},
       {'name': 'BFP Bagabag', 'number': '09171115555', 'type': 'fire'},
-      {'name': 'MDRRMO Bagabag', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO Bagabag', 'number': '09266324196', 'type': 'disaster'},
     ],
     'Bambang': [
       {'name': 'PNP Bambang', 'number': '09065630944', 'type': 'police'},
       {'name': 'BFP Bambang', 'number': '09175444946', 'type': 'fire'},
-      {'name': 'NV Provincial Hospital', 'number': '09228680843', 'type': 'medical'},
-      {'name': 'MDRRMO Bambang', 'number': '09175861838', 'type': 'disaster'},
+      {
+        'name': 'NV Provincial Hospital',
+        'number': '09228680843',
+        'type': 'medical',
+      },
+      {'name': 'MDRRMO Bambang', 'number': '09560193138', 'type': 'disaster'},
     ],
     'Bayombong': [
       {'name': 'PNP Bayombong', 'number': '09169196455', 'type': 'police'},
       {'name': 'BFP Bayombong', 'number': '09151721574', 'type': 'fire'},
-      {'name': 'Nueva Vizcaya Prov. Hospital', 'number': '09228680843', 'type': 'medical'},
-      {'name': 'PDRRMO Nueva Vizcaya', 'number': '09178500670', 'type': 'disaster'},
+      {
+        'name': 'Nueva Vizcaya Prov. Hospital',
+        'number': '09228680843',
+        'type': 'medical',
+      },
+      {
+        'name': 'PDRRMO Nueva Vizcaya',
+        'number': '09176584579',
+        'type': 'disaster',
+      },
     ],
     'Diadi': [
       {'name': 'PNP Diadi', 'number': '09989673133', 'type': 'police'},
       {'name': 'BFP Diadi', 'number': '09171116666', 'type': 'fire'},
-      {'name': 'Diadi Emergency Hospital', 'number': '09228680843', 'type': 'medical'},
-      {'name': 'MDRRMO / PDRRMO', 'number': '09171227150', 'type': 'disaster'},
+      {
+        'name': 'Diadi Emergency Hospital',
+        'number': '09228680843',
+        'type': 'medical',
+      },
+      {'name': 'MDRRMO / PDRRMO', 'number': '09161258875', 'type': 'disaster'},
     ],
     'Dupax del Norte': [
-      {'name': 'PNP Dupax del Norte', 'number': '09989673134', 'type': 'police'},
+      {
+        'name': 'PNP Dupax del Norte',
+        'number': '09989673134',
+        'type': 'police',
+      },
       {'name': 'BFP Dupax del Norte', 'number': '09171117777', 'type': 'fire'},
-      {'name': 'Dupax District Hospital', 'number': '0788081178', 'type': 'medical'},
-      {'name': 'MDRRMO / PDRRMO', 'number': '09171227150', 'type': 'disaster'},
+      {
+        'name': 'Dupax District Hospital',
+        'number': '0788081178',
+        'type': 'medical',
+      },
+      {'name': 'MDRRMO / PDRRMO', 'number': '09176589565', 'type': 'disaster'},
     ],
     'Dupax del Sur': [
       {'name': 'PNP Dupax del Sur', 'number': '09989673135', 'type': 'police'},
       {'name': 'BFP Dupax del Sur', 'number': '09171118888', 'type': 'fire'},
-      {'name': 'MDRRMO / PDRRMO', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO / PDRRMO', 'number': '09175927920', 'type': 'disaster'},
     ],
     'Kasibu': [
       {'name': 'PNP Kasibu', 'number': '09055889533', 'type': 'police'},
       {'name': 'BFP Kasibu', 'number': '09171119999', 'type': 'fire'},
-      {'name': 'Kasibu Municipal Hospital', 'number': '09273659546', 'type': 'medical'},
-      {'name': 'MDRRMO Kasibu', 'number': '09171227150', 'type': 'disaster'},
+      {
+        'name': 'Kasibu Municipal Hospital',
+        'number': '09273659546',
+        'type': 'medical',
+      },
+      {'name': 'MDRRMO Kasibu', 'number': '09777785675', 'type': 'disaster'},
     ],
     'Kayapa': [
       {'name': 'PNP Kayapa', 'number': '09175168649', 'type': 'police'},
       {'name': 'BFP Kayapa', 'number': '09172221111', 'type': 'fire'},
-      {'name': 'MDRRMO Kayapa', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO Kayapa', 'number': '09164946926', 'type': 'disaster'},
     ],
     'Quezon': [
       {'name': 'PNP Quezon', 'number': '09351346735', 'type': 'police'},
       {'name': 'BFP Quezon', 'number': '09172223333', 'type': 'fire'},
-      {'name': 'MDRRMO Quezon', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO Quezon', 'number': '09068606785', 'type': 'disaster'},
     ],
     'Santa Fe': [
       {'name': 'PNP Santa Fe', 'number': '09164625062', 'type': 'police'},
       {'name': 'BFP Santa Fe', 'number': '09172224444', 'type': 'fire'},
-      {'name': 'MDRRMO Santa Fe', 'number': '09171227150', 'type': 'disaster'},
+      {'name': 'MDRRMO Santa Fe', 'number': '09562465185', 'type': 'disaster'},
     ],
     'Solano': [
       {'name': 'PNP Solano', 'number': '09274008033', 'type': 'police'},
@@ -244,25 +240,73 @@ class EmergencyContactsScreen extends StatelessWidget {
     'Villaverde': [
       {'name': 'PNP Villaverde', 'number': '09062683761', 'type': 'police'},
       {'name': 'BFP Villaverde', 'number': '09172225555', 'type': 'fire'},
-      {'name': 'MDRRMO Villaverde', 'number': '09171227150', 'type': 'disaster'},
+      {
+        'name': 'MDRRMO Villaverde',
+        'number': '09178067038',
+        'type': 'disaster',
+      },
     ],
   };
 
   // Province-wide services relevant to every municipality (hospitals, utilities,
   // and provincial offices). Shown under "Provincial Services" on every screen.
   static const List<Map<String, String>> _provincialServices = [
-    {'name': 'Region II Trauma & Medical Center (R2TMC)', 'number': '078-321-2222', 'type': 'medical'},
-    {'name': 'Veterans Regional Hospital (Bayombong)', 'number': '078-321-2305', 'type': 'medical'},
-    {'name': 'NV Provincial Hospital', 'number': '09228680843', 'type': 'medical'},
-    {'name': 'NUVELCO (Electric Coop) Hotline', 'number': '078-321-2102', 'type': 'utility'},
-    {'name': 'Nueva Vizcaya Water District', 'number': '078-321-2151', 'type': 'utility'},
-    {'name': 'PNP Provincial HQ (Camp Diego)', 'number': '09985985926', 'type': 'police'},
+    {
+      'name': 'Region II Trauma & Medical Center (R2TMC)',
+      'number': '078-321-2222',
+      'type': 'medical',
+    },
+    {
+      'name': 'Veterans Regional Hospital (Bayombong)',
+      'number': '078-321-2305',
+      'type': 'medical',
+    },
+    {
+      'name': 'NV Provincial Hospital',
+      'number': '09228680843',
+      'type': 'medical',
+    },
+    {
+      'name': 'NUVELCO (Electric Coop) Hotline',
+      'number': '078-321-2102',
+      'type': 'utility',
+    },
+    {
+      'name': 'Nueva Vizcaya Water District',
+      'number': '078-321-2151',
+      'type': 'utility',
+    },
+    {
+      'name': 'PNP Provincial HQ (Camp Diego)',
+      'number': '09985985926',
+      'type': 'police',
+    },
     {'name': 'BFP Provincial Office', 'number': '078-803-1730', 'type': 'fire'},
-    {'name': 'Philippine Red Cross – Nueva Vizcaya', 'number': '078-321-2738', 'type': 'redcross'},
-    {'name': 'Provincial Social Welfare (PSWDO)', 'number': '078-803-2419', 'type': 'women'},
-    {'name': 'Provincial Health Office', 'number': '078-321-2024', 'type': 'medical'},
-    {'name': 'Provincial Veterinary Office (Rabies/Animal Bite)', 'number': '078-321-2024', 'type': 'vet'},
-    {'name': 'Provincial Disaster Risk Reduction (PDRRMO)', 'number': '09171227150', 'type': 'disaster'},
+    {
+      'name': 'Philippine Red Cross – Nueva Vizcaya',
+      'number': '078-321-2738',
+      'type': 'redcross',
+    },
+    {
+      'name': 'Provincial Social Welfare (PSWDO)',
+      'number': '078-803-2419',
+      'type': 'women',
+    },
+    {
+      'name': 'Provincial Health Office',
+      'number': '078-321-2024',
+      'type': 'medical',
+    },
+    {
+      'name': 'Provincial Veterinary Office (Rabies/Animal Bite)',
+      'number': '078-321-2024',
+      'type': 'vet',
+    },
+    {
+      'name': 'Provincial Disaster Risk Reduction (PDRRMO)',
+      'number': '09171227150',
+      'type': 'disaster',
+    },
   ];
 
   // Groups the long national-hotline list into readable categories so the
@@ -490,23 +534,28 @@ class EmergencyContactsScreen extends StatelessWidget {
             color: iconColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(_getIconForType(type), color: iconColor, size: 22, semanticLabel: _getSemanticLabelForType(type)),
+          child: Icon(
+            _getIconForType(type),
+            color: iconColor,
+            size: 22,
+            semanticLabel: _getSemanticLabelForType(type),
+          ),
         ),
         title: Text(
           name,
-          style: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.copyWith(fontWeight: FontWeight.bold, fontSize: 14),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
         subtitle: Text(
           number,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(fontSize: 15, color: Colors.grey.shade700),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 15,
+            color: Colors.grey.shade700,
+          ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
@@ -546,14 +595,17 @@ class EmergencyContactsScreen extends StatelessWidget {
       if (items.isEmpty) continue;
       nationalChildren.add(_buildSubHeader(category));
       nationalChildren.addAll(
-          items.map((c) => _buildContactTile(c, rawLguColor, context)));
+        items.map((c) => _buildContactTile(c, rawLguColor, context)),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: rawLguColor,
         foregroundColor: Colors.white,
-        title: Text('$activeMunicipalityName ${AppStrings.get('emergencyContacts')}'),
+        title: Text(
+          '$activeMunicipalityName ${AppStrings.get('emergencyContacts')}',
+        ),
       ),
       body: SafeArea(
         top: false,
@@ -566,7 +618,8 @@ class EmergencyContactsScreen extends StatelessWidget {
             // ── Local contacts (most relevant → expanded by default) ──
             if (localContacts.isNotEmpty)
               _collapsibleSection(
-                title: '$activeMunicipalityName ${AppStrings.get('localContacts')}',
+                title:
+                    '$activeMunicipalityName ${AppStrings.get('localContacts')}',
                 count: localContacts.length,
                 accent: accent,
                 icon: Icons.location_city_outlined,
