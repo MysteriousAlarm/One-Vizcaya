@@ -79,6 +79,13 @@ export async function updateReportStatus(userId: string, reportId: string, statu
   });
 }
 
+export async function assignResponder(userId: string, reportId: string, responder: string) {
+  await updateDoc(doc(db, "users", userId, "reports", reportId), {
+    assignedResponder: responder,
+    lastModified: Timestamp.now(),
+  });
+}
+
 export async function addReportNote(
   userId: string,
   reportId: string,
