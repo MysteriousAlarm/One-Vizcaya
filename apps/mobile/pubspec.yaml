@@ -23,7 +23,7 @@ dependencies:
   url_launcher: ^6.2.6
   image_picker: ^1.0.7
   geolocator: ^14.0.2
-  fluttertoast: ^9.0.0
+  fluttertoast: ^10.0.0
   timeago: ^3.6.1
   shared_preferences: ^2.3.2
   qr_flutter: ^4.1.0
