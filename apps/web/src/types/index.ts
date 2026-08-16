@@ -2,6 +2,9 @@ import type { AdminRole } from "@/lib/firebase";
 
 export type ReportStatus = "reported" | "acknowledged" | "under_review" | "ongoing" | "solved";
 export type ReportPriority = "critical" | "high" | "medium" | "low";
+// Administrative tier currently handling a report. Mirrors the mobile
+// HandlingLevel enum (Firestore stores these exact string keys).
+export type HandlingLevel = "barangay" | "municipal" | "provincial" | "region_ii";
 export type ResponderType = "mdrrmo" | "police" | "fire" | "hospital" | "health" | "dpwh";
 
 export interface ReportNote {
@@ -31,6 +34,8 @@ export interface Report {
   satisfactionRating?: number;
   imageUrl?: string;
   lastModified: Date;
+  handlingLevel: HandlingLevel;
+  escalatedToProvince?: boolean;
 }
 
 export interface Responder {
