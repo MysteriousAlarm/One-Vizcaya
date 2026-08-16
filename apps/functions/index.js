@@ -942,7 +942,9 @@ const NV_MUNICIPALITY_COORDS = {
  * .env entry). Without it the job logs a warning and no-ops — nothing breaks.
  */
 exports.rainfallWatch = onSchedule(
-  { schedule: "0 */3 * * *", timeZone: "Asia/Manila" },
+  // The `secrets` binding makes the OPENWEATHER_API_KEY set via
+  // `firebase functions:secrets:set` available as process.env at runtime.
+  { schedule: "0 */3 * * *", timeZone: "Asia/Manila", secrets: ["OPENWEATHER_API_KEY"] },
   async () => {
     const apiKey = process.env.OPENWEATHER_API_KEY;
     if (!apiKey) {
