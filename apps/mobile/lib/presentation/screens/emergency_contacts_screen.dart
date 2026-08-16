@@ -22,16 +22,9 @@ class EmergencyContactsScreen extends StatelessWidget {
       'number': '078-396-0796',
       'type': 'infrastructure',
     },
-    {
-      'name': 'DPWH Nueva Vizcaya DEO',
-      'number': '09175000100',
-      'type': 'infrastructure',
-    },
-    {
-      'name': 'PDRRMO Nueva Vizcaya',
-      'number': '09171227150',
-      'type': 'disaster',
-    },
+    // NOTE: Province-specific offices (PDRRMO Nueva Vizcaya, DPWH NV DEO) live
+    // under "Provincial Services" below — kept out of this national list to
+    // avoid the duplicate listings reported in testing (N2).
     // ── Mental health & crisis support ──
     {
       'name': 'NCMH Crisis Hotline (Mental Health)',
@@ -283,6 +276,11 @@ class EmergencyContactsScreen extends StatelessWidget {
     },
     {'name': 'BFP Provincial Office', 'number': '078-803-1730', 'type': 'fire'},
     {
+      'name': 'DPWH Nueva Vizcaya DEO',
+      'number': '09175000100',
+      'type': 'infrastructure',
+    },
+    {
       'name': 'Philippine Red Cross – Nueva Vizcaya',
       'number': '078-321-2738',
       'type': 'redcross',
@@ -498,18 +496,35 @@ class EmergencyContactsScreen extends StatelessWidget {
     );
   }
 
-  // Lightweight label separating categories inside the national section.
-  Widget _buildSubHeader(String title) {
+  // Label separating categories inside the national section. Uses the
+  // contrast-adjusted municipality accent (N3) so it stays legible in both
+  // light and dark mode instead of the old washed-out grey.
+  Widget _buildSubHeader(String title, Color accent) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-          letterSpacing: 0.6,
-          color: Colors.grey.shade600,
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 14,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                color: accent,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -593,7 +608,7 @@ class EmergencyContactsScreen extends StatelessWidget {
           .where((c) => _categoryOfType[c['type']] == category)
           .toList();
       if (items.isEmpty) continue;
-      nationalChildren.add(_buildSubHeader(category));
+      nationalChildren.add(_buildSubHeader(category, accent));
       nationalChildren.addAll(
         items.map((c) => _buildContactTile(c, rawLguColor, context)),
       );
@@ -602,7 +617,7 @@ class EmergencyContactsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: rawLguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(rawLguColor),
         title: Text(
           '$activeMunicipalityName ${AppStrings.get('emergencyContacts')}',
         ),

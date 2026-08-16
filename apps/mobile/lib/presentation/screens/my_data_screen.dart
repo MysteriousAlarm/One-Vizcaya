@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/utils/color_utils.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -167,7 +168,7 @@ class _MyDataScreenState extends State<MyDataScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: _lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(_lguColor),
         title: Text(AppStrings.get('myDataTitle'),
             style: const TextStyle(fontWeight: FontWeight.w600)),
         elevation: 0,

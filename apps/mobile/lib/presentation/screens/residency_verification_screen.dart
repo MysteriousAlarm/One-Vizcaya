@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/utils/color_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -173,7 +174,7 @@ class _ResidencyVerificationScreenState
     return Scaffold(
       appBar: AppBar(
         backgroundColor: lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(lguColor),
         title: const Text('Verify Residency'),
       ),
       body: _submitting && _status == null

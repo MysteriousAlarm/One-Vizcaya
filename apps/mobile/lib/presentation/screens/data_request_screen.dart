@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/utils/color_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/l10n/app_strings.dart';
@@ -94,7 +95,7 @@ class _DataRequestScreenState extends State<DataRequestScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: _lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(_lguColor),
         title: Text(AppStrings.get('dataRequestTitle'),
             style: const TextStyle(fontWeight: FontWeight.w600)),
         elevation: 0,
