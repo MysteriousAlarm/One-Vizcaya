@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -17,6 +18,12 @@ if (keyPropertiesFile.exists()) {
     keyProperties.load(FileInputStream(keyPropertiesFile))
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
+    }
+}
+
 android {
     namespace = "com.onevizcaya.app"
     compileSdk = flutter.compileSdkVersion
@@ -26,11 +33,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-
 
     defaultConfig {
         applicationId = "com.onevizcaya.app"
@@ -73,3 +75,4 @@ android {
 flutter {
     source = "../.."
 }
+
