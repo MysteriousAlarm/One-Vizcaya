@@ -52,21 +52,41 @@ class _ResidencyVerificationScreenState
       return;
     }
     final db = FirebaseFirestore.instance;
-    final profile = await db.collection('users').doc(uid).get();
-    final reqs = await db
-        .collection('verificationRequests')
-        .where('uid', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(1)
-        .get();
+    String muni = '', name = '', phone = '', status = 'unverified';
+    String? reqStatus;
+
+    // Load the profile and the latest request separately, each guarded, so the
+    // screen never spins forever if one query fails (e.g. the verificationRequests
+    // composite index is missing / still building, or a transient network error).
+    try {
+      final profile = await db.collection('users').doc(uid).get();
+      muni = (profile.data()?['municipality'] as String?) ?? '';
+      name = (profile.data()?['name'] as String?) ?? '';
+      phone = (profile.data()?['phoneNumber'] as String?) ?? '';
+      status = (profile.data()?['residencyStatus'] as String?) ?? 'unverified';
+    } catch (e) {
+      debugPrint('Residency _load profile error: $e');
+    }
+    try {
+      final reqs = await db
+          .collection('verificationRequests')
+          .where('uid', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+      reqStatus =
+          reqs.docs.isNotEmpty ? reqs.docs.first.data()['status'] as String? : null;
+    } catch (e) {
+      debugPrint('Residency _load requests error (index?): $e');
+    }
+
     if (!mounted) return;
     setState(() {
-      _municipality = (profile.data()?['municipality'] as String?) ?? '';
-      _name = (profile.data()?['name'] as String?) ?? '';
-      _phone = (profile.data()?['phoneNumber'] as String?) ?? '';
-      _status = (profile.data()?['residencyStatus'] as String?) ?? 'unverified';
-      _requestStatus =
-          reqs.docs.isNotEmpty ? reqs.docs.first.data()['status'] as String? : null;
+      _municipality = muni;
+      _name = name;
+      _phone = phone;
+      _status = status;
+      _requestStatus = reqStatus;
       _submitting = false;
     });
   }

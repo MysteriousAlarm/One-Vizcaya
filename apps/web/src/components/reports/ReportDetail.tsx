@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { updateReportStatus, addReportNote, deleteReport } from "@/hooks/useReports";
+import { updateReportStatus, assignResponder, addReportNote, deleteReport } from "@/hooks/useReports";
+import { useResponders } from "@/hooks/useResponders";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "@/hooks/useToast";
 import { cn, timeAgo, authorColor } from "@/lib/utils";
@@ -52,16 +53,34 @@ interface ReportDetailProps {
 
 export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
   const { user } = useAuthStore();
+  const { responders } = useResponders();
   const [status, setStatus] = useState<ReportStatus | "">(report?.status ?? "");
+  const [assigned, setAssigned] = useState<string>(report?.assignedResponder ?? "");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync status when a different report is opened — fixes stale state bug
   useEffect(() => {
-    if (report) setStatus(report.status);
+    if (report) {
+      setStatus(report.status);
+      setAssigned(report.assignedResponder ?? "");
+    }
     setNote("");
   }, [report]);
+
+  const handleAssign = async (responderName: string) => {
+    if (!report) return;
+    const prev = assigned;
+    setAssigned(responderName);
+    try {
+      await assignResponder(report.userId, report.id, responderName);
+      toast({ title: `Assigned to ${responderName}`, variant: "success" as never });
+    } catch {
+      setAssigned(prev);
+      toast({ title: "Failed to assign responder", variant: "destructive" });
+    }
+  };
 
   const appendCanned = useCallback((text: string) => {
     setNote((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
@@ -137,7 +156,7 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
                 <InfoRow icon={<MapPin className="h-3.5 w-3.5" />}  label="Location"    value={report.location || "—"} />
                 <InfoRow icon={<Clock className="h-3.5 w-3.5" />}   label="Reported"    value={format(report.reportedAt, "MMM d, yyyy · h:mm a")} />
                 <InfoRow icon={<User className="h-3.5 w-3.5" />}    label="Reporter"    value={report.isAnonymous ? "Anonymous" : report.userId.slice(0, 10) + "…"} />
-                <InfoRow icon={<AlertCircle className="h-3.5 w-3.5" />} label="Assigned To" value={report.assignedResponder || "Unassigned"} />
+                <InfoRow icon={<AlertCircle className="h-3.5 w-3.5" />} label="Assigned To" value={assigned || "Unassigned"} />
               </div>
 
               {/* Description */}
@@ -188,6 +207,33 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
                     <span className="ml-1.5 hidden sm:inline">Save</span>
                   </Button>
                 </div>
+              </div>
+
+              {/* Assign responder */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Assign Responder</p>
+                <Select value={assigned} onValueChange={handleAssign}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Choose a responder…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {responders
+                      .filter((r) => {
+                        const m = (r.municipality ?? "").toLowerCase();
+                        return m === report.municipality.toLowerCase() || m === "all" || m === "";
+                      })
+                      .map((r) => (
+                        <SelectItem key={r.id} value={r.name} className="text-sm">
+                          {r.name}{r.type ? ` · ${r.type}` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {assigned && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Currently assigned: <span className="font-medium text-foreground">{assigned}</span> — saved automatically.
+                  </p>
+                )}
               </div>
 
               <Separator />

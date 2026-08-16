@@ -33,7 +33,9 @@ export function BroadcastCard() {
         body: body.trim(),
         urgent,
         scope,
-        municipality: scope === "municipality" ? municipality : undefined,
+        // Only include municipality when scoped — Firestore rejects an
+        // `undefined` field, which was causing "All Users" to fail.
+        ...(scope === "municipality" ? { municipality } : {}),
         sentBy: user.uid,
       });
       toast({ title: "Broadcast sent!", description: `Sent to ${scope === "all" ? "all users" : municipality}`, variant: "success" as never });
