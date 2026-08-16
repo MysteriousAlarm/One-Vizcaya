@@ -81,7 +81,7 @@ Stream<List<FeedItem>> notificationFeedStream(String uid, String municipality) {
     announcements = snap.docs
         .where((d) {
           final muni = (d.data()['municipality'] as String?) ?? '';
-          return muni == municipality || muni == 'All';
+          return muni == municipality || muni.toLowerCase() == 'all';
         })
         .map((d) {
           final m = d.data();

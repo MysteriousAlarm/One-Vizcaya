@@ -730,21 +730,31 @@ exports.onNewBroadcast = onDocumentCreated(
     const data = event.data?.data();
     if (!data) return;
 
-    const { title, body, scope } = data;
+    const { title, body, scope, municipality } = data;
     if (!title || !body) return;
 
     const db = admin.firestore();
 
-    // Query users in the target scope. Firestore can't combine an inequality
-    // (fcmToken != null) with an equality on a different field without a
-    // composite index, so for a scoped broadcast we filter by municipality
-    // only and drop token-less users in code below.
-    let query;
-    if (scope && scope !== "All Province") {
-      query = db.collection("users").where("municipality", "==", scope);
-    } else {
-      query = db.collection("users").where("fcmToken", "!=", null);
+    // Resolve the target municipality across all writers:
+    //   • admin composer: scope="all" (province-wide) or scope="municipality" + municipality field
+    //   • rainfallWatch:  scope=<municipality name>
+    //   • legacy:         scope="All Province"
+    let targetMuni = null;
+    if (municipality) {
+      targetMuni = municipality;
+    } else if (
+      scope &&
+      !["all", "All Province", "municipality"].includes(scope)
+    ) {
+      targetMuni = scope; // scope is itself a municipality name
     }
+
+    // Firestore can't combine an inequality (fcmToken != null) with an equality
+    // on a different field without a composite index, so for a scoped broadcast
+    // we filter by municipality and drop token-less users in code below.
+    const query = targetMuni
+      ? db.collection("users").where("municipality", "==", targetMuni)
+      : db.collection("users").where("fcmToken", "!=", null);
 
     const usersSnap = await query.get();
     if (usersSnap.empty) return;
@@ -796,11 +806,12 @@ exports.onNewAnnouncement = onDocumentCreated(
 
     const db = admin.firestore();
 
-    // "All" → every user with a token; otherwise only that municipality's users.
-    const query =
-      municipality === "All"
-        ? db.collection("users").where("fcmToken", "!=", null)
-        : db.collection("users").where("municipality", "==", municipality);
+    // Province-wide → every user with a token; otherwise only that town's users.
+    // Match "all" case-insensitively (web writes "all", seed data uses "All").
+    const isAllScope = String(municipality).toLowerCase() === "all";
+    const query = isAllScope
+      ? db.collection("users").where("fcmToken", "!=", null)
+      : db.collection("users").where("municipality", "==", municipality);
 
     const usersSnap = await query.get();
     if (usersSnap.empty) return;

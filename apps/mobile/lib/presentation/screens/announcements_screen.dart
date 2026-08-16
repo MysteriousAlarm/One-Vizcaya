@@ -203,11 +203,13 @@ class _AnnouncementsListState extends State<_AnnouncementsList> {
           );
         }
 
-        // Filter: show announcements for this municipality OR province-wide ('All')
+        // Filter: show announcements for this municipality OR province-wide.
+        // Match "all" case-insensitively — the web composer writes "all" while
+        // older/seed data uses "All".
         final allDocs = (snapshot.data?.docs ?? []).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final muni = data['municipality'] as String? ?? '';
-          return muni == widget.municipality || muni == 'All';
+          return muni == widget.municipality || muni.toLowerCase() == 'all';
         }).toList();
 
         // Distinct agencies (postedBy) for the agency filter dropdown.

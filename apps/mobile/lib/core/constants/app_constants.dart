@@ -370,9 +370,10 @@ class AppConstants {
   };
   static const String defaultHotline = '+639123456789';
 
-  // One-command emergency line (PDRRMO Nueva Vizcaya provincial trunk), dialled
-  // by the home-screen SOS button in a single tap.
-  static const String pdrrmoHotline = '09178500670';
+  // One-command emergency line (Provincial DRRMO Nueva Vizcaya), dialled by the
+  // home-screen SOS button in a single tap. Verified from the official PDRRMO
+  // Nueva Vizcaya hotline poster (Provincial DRRMO: 0917-122-7150).
+  static const String pdrrmoHotline = '09171227150';
   static const String pdrrmoHotlineLabel = 'PDRRMO Nueva Vizcaya';
 
   // FIX 10: Log when the default fallback hotline is used so missing entries are visible
