@@ -40,6 +40,9 @@ class SosService {
   Future<String?> startEmergency({String? note}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
+    // Don't let a double-tap (or an already-running emergency) create duplicate
+    // beacons — reuse the one that's already live.
+    if (_activeAlertId != null) return _activeAlertId;
 
     // Profile for name / phone / scope so responders know who + where.
     String name = user.displayName ?? '', phone = user.phoneNumber ?? '';
@@ -194,6 +197,35 @@ class SosService {
 
   Stream<List<SosAlert>> _mapAlerts(Query<Map<String, dynamic>> q) =>
       q.snapshots().map((s) => s.docs.map(SosAlert.fromFirestore).toList());
+
+  /// Operator confirms the SOS is real (after calling/messaging the person).
+  /// Recorded for accountability; dispatch should follow a verification.
+  Future<void> verify(String alertId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    await _col.doc(alertId).set({
+      'verified': true,
+      'verifiedBy': uid,
+      'verifiedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Admin marks responders dispatched.
+  Future<void> dispatch(String alertId) => setStatus(alertId, SosStatus.dispatched);
+
+  /// Close an alert with a disposition: a genuine 'resolved', an honest
+  /// 'false_alarm', or deliberate 'abuse' (which feeds the abuser flag).
+  Future<void> resolveWith(String alertId, String disposition) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    await _col.doc(alertId).set({
+      'status': 'resolved',
+      'disposition': disposition,
+      'resolvedBy': uid,
+      'resolvedAt': FieldValue.serverTimestamp(),
+      'tracking': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
   /// Admin marks responders dispatched / the emergency resolved.
   Future<void> setStatus(String alertId, SosStatus status) async {

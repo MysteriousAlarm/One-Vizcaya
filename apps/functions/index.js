@@ -956,6 +956,53 @@ exports.onSosAlertCreated = onDocumentCreated(
     const db = admin.firestore();
     const municipality = data.municipality || "";
     const barangay = data.barangay || "";
+    const uid = data.uid;
+    const alertRef = event.data.ref;
+
+    // ── Soft anti-abuse flag (never blocks; operators still verify) ──────────
+    // Flag this beacon if the person is firing SOS in rapid succession or has a
+    // history of false/abuse dispositions. Flagged alerts are shown last and
+    // marked "verify before dispatch" — a real emergency is never dropped.
+    let flagReason = null;
+    try {
+      // Burst detection: > 3 SOS within a 10-minute rolling window.
+      const rateRef = db.collection("sos_rate").doc(uid);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(rateRef);
+        const now = Date.now();
+        const winMs = 10 * 60 * 1000;
+        const d = snap.exists ? snap.data() : null;
+        const start = d && d.windowStart ? d.windowStart.toMillis() : 0;
+        let count = d ? d.count || 0 : 0;
+        if (now - start < winMs) {
+          count += 1;
+        } else {
+          count = 1;
+        }
+        tx.set(rateRef, {
+          count,
+          windowStart: now - start < winMs && d && d.windowStart
+            ? d.windowStart
+            : admin.firestore.FieldValue.serverTimestamp(),
+          lastAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        if (count > 3) flagReason = "rapid repeated SOS";
+      });
+
+      // Prior-abuse history on the citizen's profile.
+      if (!flagReason && uid) {
+        const u = (await db.collection("users").doc(uid).get()).data() || {};
+        if (u.sosFlagged === true || (u.sosAbuseCount || 0) >= 2) {
+          flagReason = "prior false / abuse reports";
+        }
+      }
+    } catch (e) {
+      console.error("SOS anti-abuse check failed (fail-open):", e);
+    }
+    if (flagReason) {
+      await alertRef.set({ flagged: true, flagReason }, { merge: true })
+        .catch((e) => console.error("SOS flag write failed:", e));
+    }
 
     // Admin roles are held by very few users, so query by role and filter scope
     // in memory — avoids scanning a whole town's citizens.
@@ -990,12 +1037,14 @@ exports.onSosAlertCreated = onDocumentCreated(
       barangay ? `Brgy. ${barangay}` : null,
       municipality || null,
     ].filter(Boolean).join(", ");
-    const body = `${data.name || "A resident"} needs help${where ? ` in ${where}` : ""}. Tap to dispatch.`;
+    const title = flagReason ? "⚠ SOS (flagged — verify)" : "🚨 EMERGENCY SOS";
+    const body = `${data.name || "A resident"} needs help${where ? ` in ${where}` : ""}. `
+      + (flagReason ? `Flagged (${flagReason}) — verify first.` : "Tap to verify & dispatch.");
 
     for (let i = 0; i < list.length; i += 500) {
       await admin.messaging().sendEachForMulticast({
         tokens: list.slice(i, i + 500),
-        notification: { title: "🚨 EMERGENCY SOS", body },
+        notification: { title, body },
         android: {
           priority: "high",
           notification: {
@@ -1013,6 +1062,47 @@ exports.onSosAlertCreated = onDocumentCreated(
           click_action: "FLUTTER_NOTIFICATION_CLICK",
         },
       }).catch((e) => console.error("SOS FCM batch failed:", e));
+    }
+  }
+);
+
+// ── SOS abuse accounting ─────────────────────────────────────────────────────
+// When an operator closes an SOS as 'abuse', increment that citizen's abuse
+// tally; once it reaches the threshold the profile is flagged so their FUTURE
+// SOS are auto-marked "verify first" (they are never blocked — an operator
+// still checks every one, guarding against false positives). Every decision is
+// audited.
+exports.onSosAlertUpdated = onDocumentUpdated(
+  "sos_alerts/{alertId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!before || !after) return;
+    if (before.disposition === after.disposition) return; // only on decision
+    const uid = after.uid;
+    if (!uid) return;
+
+    const db = admin.firestore();
+    if (after.disposition === "abuse") {
+      const userRef = db.collection("users").doc(uid);
+      const newCount = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        const c = ((snap.data() || {}).sosAbuseCount || 0) + 1;
+        tx.set(userRef, {
+          sosAbuseCount: c,
+          sosFlagged: c >= 2, // auto-flag once a pattern emerges
+        }, { merge: true });
+        return c;
+      });
+      await db.collection("audit_logs").add({
+        action: "sos_marked_abuse",
+        targetUid: uid,
+        alertId: event.params.alertId,
+        municipality: after.municipality || null,
+        abuseCount: newCount,
+        decidedBy: after.resolvedBy || null,
+        at: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
   }
 );

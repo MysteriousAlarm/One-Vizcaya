@@ -25,6 +25,10 @@ function toAlert(id: string, d: Record<string, unknown>): SosAlert {
     status: (d.status as SosStatus) ?? "active",
     note: d.note as string | undefined,
     tracking: (d.tracking as boolean) ?? false,
+    verified: (d.verified as boolean) ?? false,
+    flagged: (d.flagged as boolean) ?? false,
+    flagReason: d.flagReason as string | undefined,
+    disposition: d.disposition as string | undefined,
     createdAt: ts(d.createdAt),
     updatedAt: ts(d.updatedAt),
   };
@@ -69,12 +73,27 @@ export function useSosAlerts() {
   return { alerts, loading };
 }
 
-export async function setSosStatus(id: string, status: Extract<SosStatus, "dispatched" | "resolved">) {
+// Operator confirms the SOS is real after calling/messaging the person.
+export async function verifySos(id: string) {
   const uid = auth.currentUser?.uid ?? null;
   await updateDoc(doc(db, "sos_alerts", id), {
-    status,
-    ...(status === "dispatched" ? { dispatchedBy: uid, dispatchedAt: Timestamp.now() } : {}),
-    ...(status === "resolved" ? { resolvedBy: uid, resolvedAt: Timestamp.now(), tracking: false } : {}),
-    updatedAt: Timestamp.now(),
+    verified: true, verifiedBy: uid, verifiedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+  });
+}
+
+export async function dispatchSos(id: string) {
+  const uid = auth.currentUser?.uid ?? null;
+  await updateDoc(doc(db, "sos_alerts", id), {
+    status: "dispatched", dispatchedBy: uid, dispatchedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+  });
+}
+
+// Close with a disposition: 'resolved' (real) | 'false_alarm' | 'abuse'.
+// 'abuse' feeds the server-side abuser flag via onSosAlertUpdated.
+export async function resolveSos(id: string, disposition: "resolved" | "false_alarm" | "abuse") {
+  const uid = auth.currentUser?.uid ?? null;
+  await updateDoc(doc(db, "sos_alerts", id), {
+    status: "resolved", disposition, resolvedBy: uid, resolvedAt: Timestamp.now(),
+    tracking: false, updatedAt: Timestamp.now(),
   });
 }

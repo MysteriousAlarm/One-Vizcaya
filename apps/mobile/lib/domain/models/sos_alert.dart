@@ -49,6 +49,17 @@ class SosAlert {
   final SosStatus status;
   final String? note;
   final bool tracking;
+  // Operator verification: every SOS should be confirmed real by an operator
+  // (call/message) before dispatch. This records that it was.
+  final bool verified;
+  final String? verifiedBy;
+  // Soft abuse flag (set server-side): the alert is still shown to operators —
+  // never dropped — but marked + deprioritised so genuine emergencies aren't
+  // buried. [flagReason] explains why (rapid repeat / prior abuse).
+  final bool flagged;
+  final String? flagReason;
+  // How a closed alert was dispositioned: 'resolved' | 'false_alarm' | 'abuse'.
+  final String? disposition;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? dispatchedBy;
@@ -67,6 +78,11 @@ class SosAlert {
     this.status = SosStatus.active,
     this.note,
     this.tracking = false,
+    this.verified = false,
+    this.verifiedBy,
+    this.flagged = false,
+    this.flagReason,
+    this.disposition,
     this.createdAt,
     this.updatedAt,
     this.dispatchedBy,
@@ -101,6 +117,11 @@ class SosAlert {
       status: sosStatusFromString(data['status'] as String?),
       note: data['note'] as String?,
       tracking: (data['tracking'] as bool?) ?? false,
+      verified: (data['verified'] as bool?) ?? false,
+      verifiedBy: data['verifiedBy'] as String?,
+      flagged: (data['flagged'] as bool?) ?? false,
+      flagReason: data['flagReason'] as String?,
+      disposition: data['disposition'] as String?,
       createdAt: ts(data['createdAt']),
       updatedAt: ts(data['updatedAt']),
       dispatchedBy: data['dispatchedBy'] as String?,

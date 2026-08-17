@@ -52,7 +52,13 @@ class SosAlertsScreen extends StatelessWidget {
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final alerts = snap.data!;
+          // Genuine emergencies first; flagged (possible-abuse) alerts sink to
+          // the bottom but are NEVER hidden — an operator still verifies them.
+          final alerts = [...snap.data!]
+            ..sort((a, b) {
+              if (a.flagged != b.flagged) return a.flagged ? 1 : -1;
+              return 0;
+            });
           if (alerts.isEmpty) {
             return Center(
               child: Column(
@@ -92,10 +98,10 @@ class SosAlertsScreen extends StatelessWidget {
                 _launch(Uri(scheme: 'tel', path: phone),
                     'Could not open the dialer.');
               },
-              onDispatch: () =>
-                  sosService.setStatus(alerts[i].id, SosStatus.dispatched),
-              onResolve: () =>
-                  sosService.setStatus(alerts[i].id, SosStatus.resolved),
+              onVerify: () => sosService.verify(alerts[i].id),
+              onDispatch: () => sosService.dispatch(alerts[i].id),
+              onResolve: (disposition) =>
+                  sosService.resolveWith(alerts[i].id, disposition),
             ),
           );
         },
@@ -108,12 +114,14 @@ class _SosCard extends StatelessWidget {
   final SosAlert alert;
   final VoidCallback onNavigate;
   final VoidCallback onCall;
+  final VoidCallback onVerify;
   final VoidCallback onDispatch;
-  final VoidCallback onResolve;
+  final void Function(String disposition) onResolve;
   const _SosCard({
     required this.alert,
     required this.onNavigate,
     required this.onCall,
+    required this.onVerify,
     required this.onDispatch,
     required this.onResolve,
   });
@@ -121,7 +129,11 @@ class _SosCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dispatched = alert.status == SosStatus.dispatched;
-    final accent = dispatched ? Colors.orange.shade800 : const Color(0xFFC62828);
+    final accent = alert.flagged
+        ? Colors.blueGrey
+        : dispatched
+            ? Colors.orange.shade800
+            : const Color(0xFFC62828);
     final hasFix = alert.lat != null && alert.lng != null;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -152,6 +164,23 @@ class _SosCard extends StatelessWidget {
                         letterSpacing: 0.5),
                   ),
                 ),
+                const SizedBox(width: 6),
+                if (alert.verified)
+                  const Icon(Icons.verified, size: 16, color: Colors.green)
+                else
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('UNVERIFIED',
+                        style: TextStyle(
+                            color: Colors.amber.shade900,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
+                  ),
                 const Spacer(),
                 if (alert.updatedAt != null)
                   Text(
@@ -160,6 +189,30 @@ class _SosCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (alert.flagged) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined,
+                        size: 14, color: Colors.blueGrey.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Flagged: ${alert.flagReason ?? 'possible misuse'} — verify before dispatch.',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.blueGrey.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(alert.name,
                 style: const TextStyle(
@@ -215,18 +268,38 @@ class _SosCard extends StatelessWidget {
                   icon: const Icon(Icons.call, size: 16),
                   label: const Text('Call'),
                 ),
+                if (!alert.verified)
+                  OutlinedButton.icon(
+                    onPressed: onVerify,
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.green.shade800),
+                    icon: const Icon(Icons.verified_outlined, size: 16),
+                    label: const Text('Verify (called)'),
+                  ),
                 if (!dispatched)
                   OutlinedButton.icon(
                     onPressed: onDispatch,
                     icon: const Icon(Icons.local_shipping_outlined, size: 16),
                     label: const Text('Dispatch'),
                   ),
-                OutlinedButton.icon(
-                  onPressed: onResolve,
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green.shade700),
-                  icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Resolve'),
+                PopupMenuButton<String>(
+                  onSelected: onResolve,
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                        value: 'resolved', child: Text('✓ Resolved (real)')),
+                    PopupMenuItem(
+                        value: 'false_alarm', child: Text('False alarm')),
+                    PopupMenuItem(
+                        value: 'abuse', child: Text('⚠ Mark as abuse')),
+                  ],
+                  child: OutlinedButton.icon(
+                    onPressed: null,
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.green.shade700,
+                        disabledForegroundColor: Colors.green.shade700),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Close ▾'),
+                  ),
                 ),
               ],
             ),

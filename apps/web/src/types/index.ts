@@ -118,6 +118,10 @@ export interface SosAlert {
   status: SosStatus;
   note?: string;
   tracking: boolean;
+  verified: boolean;
+  flagged: boolean;
+  flagReason?: string;
+  disposition?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

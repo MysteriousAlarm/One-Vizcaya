@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
-import { Siren, Navigation, Phone, Truck, Check, Loader2, ShieldCheck } from "lucide-react";
+import { Siren, Navigation, Phone, Truck, Check, Loader2, ShieldCheck, BadgeCheck, Flag, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { useSosAlerts, setSosStatus } from "@/hooks/useSosAlerts";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useSosAlerts, verifySos, dispatchSos, resolveSos } from "@/hooks/useSosAlerts";
 import { toast } from "@/hooks/useToast";
 import { timeAgo } from "@/lib/utils";
 import { MAPS_API_KEY, NV_CENTER, NV_ZOOM } from "@/lib/firebase";
@@ -50,7 +51,10 @@ function EmergenciesPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(320px,420px)] gap-4">
           <div className="space-y-3 order-2 lg:order-1">
-            {alerts.map((a) => <AlertCard key={a.id} alert={a} />)}
+            {/* Flagged (possible-abuse) alerts sink to the bottom — never hidden. */}
+            {[...alerts].sort((a, b) => Number(a.flagged) - Number(b.flagged)).map((a) => (
+              <AlertCard key={a.id} alert={a} />
+            ))}
           </div>
           <div className="order-1 lg:order-2">
             <div className="rounded-lg overflow-hidden border shadow-sm sticky top-3" style={{ height: "clamp(240px, 40vh, 460px)" }}>
@@ -82,11 +86,11 @@ function AlertCard({ alert }: { alert: SosAlert }) {
   const hasFix = alert.lat != null && alert.lng != null;
   const mapsUrl = hasFix ? `https://www.google.com/maps/search/?api=1&query=${alert.lat},${alert.lng}` : null;
 
-  const act = async (status: "dispatched" | "resolved") => {
+  const run = async (fn: () => Promise<void>, okMsg: string) => {
     setBusy(true);
     try {
-      await setSosStatus(alert.id, status);
-      toast({ title: status === "dispatched" ? "Marked dispatched" : "Emergency resolved", variant: "success" as never });
+      await fn();
+      toast({ title: okMsg, variant: "success" as never });
     } catch {
       toast({ title: "Failed to update", variant: "destructive" });
     } finally {
@@ -95,18 +99,29 @@ function AlertCard({ alert }: { alert: SosAlert }) {
   };
 
   return (
-    <Card className={dispatched ? "border-orange-300" : "border-red-300"}>
+    <Card className={alert.flagged ? "border-slate-300 bg-slate-50/60" : dispatched ? "border-orange-300" : "border-red-300"}>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 flex-wrap mb-1.5">
           <Badge className={dispatched ? "bg-orange-600" : "bg-red-600"}>
             {dispatched ? "DISPATCHED" : "ACTIVE SOS"}
           </Badge>
+          {alert.verified ? (
+            <Badge className="bg-green-600 gap-1"><BadgeCheck className="h-3 w-3" /> Verified</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">Unverified</Badge>
+          )}
           {alert.barangay && <Badge variant="outline" className="text-[10px]">Brgy. {alert.barangay}</Badge>}
           {alert.municipality && <Badge variant="outline" className="text-[10px]">{alert.municipality}</Badge>}
           {alert.updatedAt && (
             <span className="ml-auto text-[11px] text-muted-foreground">updated {timeAgo(alert.updatedAt)}</span>
           )}
         </div>
+        {alert.flagged && (
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 bg-slate-100 rounded px-2 py-1 mb-1.5">
+            <Flag className="h-3 w-3 shrink-0" />
+            Flagged: {alert.flagReason ?? "possible misuse"} — verify before dispatch.
+          </div>
+        )}
         <p className="font-bold text-base">{alert.name}</p>
         <p className="text-xs text-muted-foreground">{alert.phone || "no phone"}</p>
         <p className="text-xs mt-1.5 font-mono">
@@ -129,14 +144,34 @@ function AlertCard({ alert }: { alert: SosAlert }) {
               <a href={`tel:${alert.phone}`}><Phone className="h-3.5 w-3.5 mr-1" /> Call</a>
             </Button>
           )}
+          {!alert.verified && (
+            <Button size="sm" variant="outline" className="text-green-800 border-green-300" disabled={busy} onClick={() => run(() => verifySos(alert.id), "Verified — real emergency")}>
+              <BadgeCheck className="h-3.5 w-3.5 mr-1" /> Verify (called)
+            </Button>
+          )}
           {!dispatched && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => act("dispatched")}>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => dispatchSos(alert.id), "Marked dispatched")}>
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Truck className="h-3.5 w-3.5 mr-1" />} Dispatch
             </Button>
           )}
-          <Button size="sm" variant="outline" className="text-green-700" disabled={busy} onClick={() => act("resolved")}>
-            <Check className="h-3.5 w-3.5 mr-1" /> Resolve
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="text-green-700" disabled={busy}>
+                <Check className="h-3.5 w-3.5 mr-1" /> Close <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => run(() => resolveSos(alert.id, "resolved"), "Resolved")}>
+                ✓ Resolved (real)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => run(() => resolveSos(alert.id, "false_alarm"), "Closed — false alarm")}>
+                False alarm
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-red-600" onClick={() => run(() => resolveSos(alert.id, "abuse"), "Marked as abuse")}>
+                <Flag className="h-3.5 w-3.5 mr-1.5" /> Mark as abuse
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardContent>
     </Card>
