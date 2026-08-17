@@ -11,6 +11,13 @@ abstract class ReportRepository {
   /// Admin: Get ALL reports across ALL users for a specific municipality
   Stream<List<ProblemReport>> getAllMunicipalityReports(String municipality);
 
+  // Reports within a single barangay of a municipality — used to scope a
+  // Barangay admin's dashboard to their own barangay.
+  Stream<List<ProblemReport>> getBarangayReports(
+    String municipality,
+    String barangay,
+  );
+
   /// Provincial Admin: Get ALL reports across ALL municipalities
   Stream<List<ProblemReport>> getAllProvincialReports();
 

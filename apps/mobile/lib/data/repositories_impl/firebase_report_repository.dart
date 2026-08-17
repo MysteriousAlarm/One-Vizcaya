@@ -71,6 +71,25 @@ class FirebaseReportRepository implements ReportRepository {
   }
 
   @override
+  Stream<List<ProblemReport>> getBarangayReports(
+    String municipality,
+    String barangay,
+  ) {
+    // Scoped to a single barangay. The equality filters on municipality AND
+    // barangay are what let the security rules authorise a Barangay admin's
+    // collectionGroup read (the rule confines them to actorMunicipality +
+    // actorBarangay).
+    return _firestore
+        .collectionGroup('reports')
+        .where('municipality', isEqualTo: municipality)
+        .where('barangay', isEqualTo: barangay)
+        .orderBy('reportedAt', descending: true)
+        .limit(_adminQueryLimit)
+        .snapshots()
+        .transform(_safeReportTransformer('getBarangayReports'));
+  }
+
+  @override
   Stream<List<ProblemReport>> getAllProvincialReports() {
     // Approval chain: the Provincial dashboard only surfaces reports a Municipal
     // admin has approved for escalation (escalatedToProvince == true). Reports

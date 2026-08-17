@@ -17,6 +17,7 @@ import '../../data/services/admin_service.dart';
 import '../../data/services/role_service.dart';
 import '../../features/auth/domain/entities/app_user.dart';
 import '../../core/utils/toast_utils.dart';
+import '../../core/utils/color_utils.dart';
 import '../../core/services/link_metadata_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_strings.dart';
@@ -40,12 +41,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   UserRole _currentUserRole = UserRole.citizen;
   bool _isLoadingRole = true;
+  // The signed-in admin's own scope (from their profile). For a Barangay admin
+  // this pins the dashboard to their municipality + barangay.
+  String _currentUserMunicipality = '';
+  String _currentUserBarangay = '';
 
   ReportPriority? _filterPriority;
   ReportStatus? _filterStatus;
+  // Reports tab barangay filter (municipal/provincial admins) — null = all.
+  String? _reportBarangayFilter;
   bool _isProvincialView = false;
   bool _sortNewestFirst = true;
   bool _isOffline = false;
+
+  bool get _isBarangayAdmin => _currentUserRole == UserRole.barangayAdmin;
+  bool get _canSeeAnnouncements => _currentUserRole != UserRole.barangayAdmin;
+  bool get _canSeeAnalytics => _currentUserRole != UserRole.barangayAdmin;
+  bool get _canSeeUsers =>
+      _currentUserRole == UserRole.provincialAdmin ||
+      _currentUserRole == UserRole.superAdmin;
 
   TabController? _tabController;
 
@@ -68,16 +82,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
     final role = await adminService.getUserRole(uid);
+    // Load the admin's own municipality + barangay so a Barangay admin can be
+    // scoped to their barangay (and to drive the role-based header).
+    String muni = '', brgy = '';
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      muni = (doc.data()?['municipality'] as String?) ?? '';
+      brgy = (doc.data()?['barangay'] as String?) ?? '';
+    } catch (_) {}
     if (!mounted) return;
 
+    // Tabs by role: Barangay = Reports only; Municipal = Reports/Announcements/
+    // Analytics; Provincial & Super = + Users.
+    final tabCount = role == UserRole.barangayAdmin
+        ? 1
+        : (role == UserRole.provincialAdmin || role == UserRole.superAdmin
+            ? 4
+            : 3);
     _tabController?.dispose();
-    _tabController = TabController(
-      length: (role == UserRole.provincialAdmin || role == UserRole.superAdmin) ? 4 : 3,
-      vsync: this,
-    );
+    _tabController = TabController(length: tabCount, vsync: this);
 
     setState(() {
       _currentUserRole = role;
+      _currentUserMunicipality = muni;
+      _currentUserBarangay = brgy;
       // Provincial & super admins default to provincial view
       // Super admin can toggle; provincial admin cannot
       _isProvincialView = role == UserRole.provincialAdmin || role == UserRole.superAdmin;
@@ -96,27 +127,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // reads as the province's identity (not whichever municipality is selected).
   static const Color _provincialHeaderColor = Color(0xFF388A54);
 
-  // Color used for the top region (app bar, tabs, summary bar). The Provincial
-  // dashboard is fixed to the NV green; municipal dashboards keep their hue but
-  // are desaturated and pulled to a readable mid-lightness so the deep primaries
-  // aren't overpowering and white text stays legible.
-  Color get _headerColor =>
-      _isProvincialView ? _provincialHeaderColor : _washHeader(_activeLguColor);
-
-  static Color _washHeader(Color c) {
-    final hsl = HSLColor.fromColor(c);
-    return hsl
-        .withSaturation((hsl.saturation * 0.72).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness * 0.5 + 0.26).clamp(0.30, 0.44))
-        .toColor();
+  // Role-based header colour — the top region (app bar, tabs, summary bar) is
+  // tinted by the admin's TIER so the level is obvious at a glance, matching the
+  // report-routing palette: Barangay green, Municipal blue, Provincial purple,
+  // Super Admin red. (Same hues as HandlingLevel.color.)
+  Color get _headerColor {
+    switch (_currentUserRole) {
+      case UserRole.superAdmin:
+        return const Color(0xFFC62828); // red
+      case UserRole.provincialAdmin:
+        return const Color(0xFF6A1B9A); // purple
+      case UserRole.municipalAdmin:
+        return const Color(0xFF1565C0); // blue
+      case UserRole.barangayAdmin:
+        return const Color(0xFF2E7D32); // green
+      default:
+        return _provincialHeaderColor;
+    }
   }
 
   Stream<List<ProblemReport>>? _reportsStream;
 
   void _rebuildReportsStream() {
-    _reportsStream = _isProvincialView
-        ? _reportRepository.getAllProvincialReports()
-        : _reportRepository.getAllMunicipalityReports(_activeMunicipalityName);
+    if (_isBarangayAdmin) {
+      // Barangay admin is confined to their own barangay's reports.
+      _reportsStream = _reportRepository.getBarangayReports(
+        _currentUserMunicipality.isNotEmpty
+            ? _currentUserMunicipality
+            : _activeMunicipalityName,
+        _currentUserBarangay,
+      );
+    } else if (_isProvincialView) {
+      _reportsStream = _reportRepository.getAllProvincialReports();
+    } else {
+      _reportsStream = _reportRepository.getAllMunicipalityReports(
+        _activeMunicipalityName,
+      );
+    }
   }
 
   void _showAddAnnouncementSheet() {
@@ -466,6 +513,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_filterStatus != null) {
       filtered = filtered.where((r) => r.status == _filterStatus).toList();
     }
+    // Barangay drill-down (municipal/provincial admins) for ease of access.
+    if (_reportBarangayFilter != null && _reportBarangayFilter!.isNotEmpty) {
+      filtered = filtered
+          .where((r) => (r.barangay ?? '') == _reportBarangayFilter)
+          .toList();
+    }
 
     if (_sortNewestFirst) {
       filtered.sort((a, b) {
@@ -501,13 +554,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     final lguColor = _activeLguColor;
     final headerColor = _headerColor;
+    // Text/icons on the role-coloured header stay legible on any tint.
+    final onHeader = ColorUtils.readableTextOn(headerColor);
     final muniName = _activeMunicipalityName;
     final tabController = _tabController!;
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: headerColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onHeader,
         // N15: keep the title from being harshly clipped — scale it down to fit
         // instead of cutting it off. The scope (which town / province-wide) is
         // also shown by the switcher action to the right.
@@ -517,7 +572,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              _isProvincialView ? 'Provincial Dashboard' : '$muniName Admin',
+              _isBarangayAdmin
+                  ? 'Brgy. ${_currentUserBarangay.isNotEmpty ? _currentUserBarangay : muniName} Admin'
+                  : _isProvincialView
+                      ? 'Provincial Dashboard'
+                      : '$muniName Admin',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               maxLines: 1,
             ),
@@ -541,6 +600,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 }
                 _filterPriority = null;
                 _filterStatus = null;
+                _reportBarangayFilter = null;
                 _rebuildReportsStream();
               }),
               itemBuilder: (context) => [
@@ -577,15 +637,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
         bottom: TabBar(
           controller: tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
+          indicatorColor: onHeader,
+          labelColor: onHeader,
+          unselectedLabelColor: onHeader.withValues(alpha: 0.6),
           tabs: [
             const Tab(icon: Icon(Icons.report_problem), text: 'Reports'),
-            const Tab(icon: Icon(Icons.campaign), text: 'Announcements'),
-            const Tab(icon: Icon(Icons.bar_chart), text: 'Analytics'),
-            if (_currentUserRole == UserRole.provincialAdmin ||
-                _currentUserRole == UserRole.superAdmin)
+            if (_canSeeAnnouncements)
+              const Tab(icon: Icon(Icons.campaign), text: 'Announcements'),
+            if (_canSeeAnalytics)
+              const Tab(icon: Icon(Icons.bar_chart), text: 'Analytics'),
+            if (_canSeeUsers)
               const Tab(icon: Icon(Icons.manage_accounts), text: 'Users'),
           ],
         ),
@@ -739,31 +800,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ],
           ),
 
-          // ── Tab 2: Announcements ──
+          // ── Tab 2: Announcements (Municipal+ only) ──
           // isProvincialAdmin mirrors _isProvincialView so toggling view
           // correctly switches between province-wide and municipal scope.
-          _AnnouncementsTab(
-            lguColor: lguColor,
-            municipality: muniName,
-            isProvincialAdmin: _isProvincialView,
-          ),
+          if (_canSeeAnnouncements)
+            _AnnouncementsTab(
+              lguColor: lguColor,
+              municipality: muniName,
+              isProvincialAdmin: _isProvincialView,
+            ),
 
-          // ── Tab 3: Analytics ──
-          StreamBuilder<List<ProblemReport>>(
-            stream: _reportsStream ?? const Stream.empty(),
-            builder: (context, snapshot) {
-              final reports = snapshot.data ?? [];
-              return _AnalyticsTab(
-                reports: reports,
-                lguColor: lguColor,
-              );
-            },
-          ),
+          // ── Tab 3: Analytics (Municipal+ only) ──
+          if (_canSeeAnalytics)
+            StreamBuilder<List<ProblemReport>>(
+              stream: _reportsStream ?? const Stream.empty(),
+              builder: (context, snapshot) {
+                final reports = snapshot.data ?? [];
+                return _AnalyticsTab(
+                  reports: reports,
+                  lguColor: lguColor,
+                );
+              },
+            ),
 
           // ── Tab 4: Users (provincial + super admin only) ──
-          if (_currentUserRole == UserRole.provincialAdmin ||
-              _currentUserRole == UserRole.superAdmin)
-            _RoleManagementTab(lguColor: lguColor),
+          if (_canSeeUsers) _RoleManagementTab(lguColor: lguColor),
         ],
       ),
     );
@@ -1023,6 +1084,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
           ),
+          // Barangay drill-down — municipal/provincial admins viewing one town.
+          // A Barangay admin is already scoped, so it's hidden for them.
+          if (!_isBarangayAdmin && !_isProvincialView)
+            Builder(builder: (context) {
+              final brgys = AppConstants
+                      .municipalityBarangays[_activeMunicipalityName] ??
+                  const <String>[];
+              if (brgys.isEmpty) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                tooltip: 'Filter by barangay',
+                padding: EdgeInsets.zero,
+                onSelected: (v) => setState(() =>
+                    _reportBarangayFilter = v == '__ALL__' ? null : v),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: '__ALL__', child: Text('All Barangays')),
+                  const PopupMenuDivider(),
+                  ...brgys.map((b) => PopupMenuItem(value: b, child: Text(b))),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.holiday_village_outlined,
+                        size: 14, color: lguColor),
+                    const SizedBox(width: 3),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 92),
+                      child: Text(
+                        _reportBarangayFilter ?? 'All Brgy.',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: lguColor,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, size: 16, color: lguColor),
+                  ],
+                ),
+              );
+            }),
           const Spacer(),
           if (_filterPriority != null || _filterStatus != null)
             TextButton(
