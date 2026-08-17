@@ -1,4 +1,9 @@
-enum UserRole { citizen, barangayAdmin, admin, municipalAdmin, provincialAdmin, superAdmin }
+// The legacy 'admin' role is RETIRED (N13). It is no longer a member of this
+// enum, so it can't be assigned anywhere in the app. Any legacy Firestore
+// document that still says role:'admin' is read as provincialAdmin (the same
+// authority the security rules always gave it) until the one-time
+// migrateLegacyAdmins function promotes it for good.
+enum UserRole { citizen, barangayAdmin, municipalAdmin, provincialAdmin, superAdmin }
 
 extension UserRoleX on UserRole {
   String get displayName {
@@ -7,8 +12,6 @@ extension UserRoleX on UserRole {
         return 'Citizen';
       case UserRole.barangayAdmin:
         return 'Barangay Admin';
-      case UserRole.admin:
-        return 'Admin';
       case UserRole.municipalAdmin:
         return 'Municipal Admin';
       case UserRole.provincialAdmin:
@@ -28,8 +31,6 @@ extension UserRoleX on UserRole {
         return 'municipal_admin';
       case UserRole.barangayAdmin:
         return 'barangay_admin';
-      case UserRole.admin:
-        return 'admin';
       case UserRole.citizen:
         return 'citizen';
     }
@@ -72,7 +73,8 @@ class AppUser {
       case 'barangay_admin':
         return UserRole.barangayAdmin;
       case 'admin':
-        return UserRole.admin;
+        // Legacy role — treated as provincial admin (rules agree).
+        return UserRole.provincialAdmin;
       default:
         return UserRole.citizen;
     }
@@ -80,7 +82,6 @@ class AppUser {
 
   bool get isAnyAdmin =>
       role == UserRole.barangayAdmin ||
-      role == UserRole.admin ||
       role == UserRole.municipalAdmin ||
       role == UserRole.provincialAdmin ||
       role == UserRole.superAdmin;

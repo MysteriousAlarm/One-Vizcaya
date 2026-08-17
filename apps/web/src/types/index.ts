@@ -101,3 +101,21 @@ export interface AuthUser {
   municipality?: string;
   barangay?: string;
 }
+
+// A nomination in the #8 workflow: an admin proposes a role for a user; a
+// super_admin approves/rejects. The role write happens server-side on approval.
+export interface RoleRequest {
+  id: string;
+  targetUid: string;
+  targetName: string;
+  targetPhone?: string;
+  requestedRole: AdminRole | "citizen";
+  municipality?: string;
+  barangay?: string;
+  nominatedBy: string;
+  nominatedByName: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Date;
+  decidedBy?: string;
+  decidedAt?: Date;
+}

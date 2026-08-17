@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../features/auth/domain/entities/app_user.dart';
 import '../../core/utils/toast_utils.dart';
 
@@ -9,14 +10,53 @@ class RoleService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Assigns [role] to the user with [targetUid] by writing to their Firestore doc.
-  Future<void> assignRole(String targetUid, UserRole role) async {
+  /// Assigns [role] to [targetUid] following the #8 governance workflow:
+  ///  - a super_admin writes the role directly;
+  ///  - any lower admin instead files a NOMINATION (a roleRequests doc) that a
+  ///    super_admin approves, after which the server applies it. Direct role
+  ///    writes by non-super admins are rejected by the security rules, so this
+  ///    routing is what keeps the button working for provincial/municipal admins.
+  Future<void> assignRole(
+    String targetUid,
+    UserRole role, {
+    String targetName = '',
+    String? targetPhone,
+    String? municipality,
+  }) async {
+    final current = FirebaseAuth.instance.currentUser;
+    if (current == null) {
+      ToastUtils.showError('You must be signed in to assign roles.');
+      return;
+    }
+    bool isSuper = false;
     try {
-      await _firestore.collection('users').doc(targetUid).set(
-        {'role': role.firestoreValue},
-        SetOptions(merge: true),
-      );
-      ToastUtils.showSuccess('Role updated to ${role.displayName}');
+      final token = await current.getIdTokenResult();
+      isSuper = token.claims?['role'] == 'super_admin';
+    } catch (_) {}
+
+    try {
+      if (isSuper) {
+        await _firestore.collection('users').doc(targetUid).set(
+          {'role': role.firestoreValue},
+          SetOptions(merge: true),
+        );
+        ToastUtils.showSuccess('Role updated to ${role.displayName}');
+      } else {
+        await _firestore.collection('roleRequests').add({
+          'targetUid': targetUid,
+          'targetName': targetName,
+          'targetPhone': targetPhone,
+          'requestedRole': role.firestoreValue,
+          'municipality': municipality,
+          'barangay': null,
+          'nominatedBy': current.uid,
+          'nominatedByName': current.displayName ?? '',
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        ToastUtils.showSuccess(
+            'Nomination submitted — a super admin will approve it.');
+      }
     } catch (e) {
       ToastUtils.showError('Failed to assign role: $e');
       rethrow;

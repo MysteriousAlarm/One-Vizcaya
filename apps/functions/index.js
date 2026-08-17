@@ -195,35 +195,129 @@ exports.resetRateLimits = onSchedule(
   }
 );
 
-// ── Set Admin Role ───────────────────────────────────────────────────────────
-// Supports roles: 'admin', 'municipal_admin', 'provincial_admin', 'citizen'
+// Canonical role set. The legacy 'admin' role is RETIRED — it is no longer
+// assignable; any legacy 'admin' account is migrated to 'provincial_admin'
+// (see migrateLegacyAdmins). Kept out of VALID_ROLES so it can't be re-granted.
+const VALID_ROLES = [
+  "citizen",
+  "barangay_admin",
+  "municipal_admin",
+  "provincial_admin",
+  "super_admin",
+];
+
+// Apply a role to a user everywhere it must live: the Auth custom claim (drives
+// security-rule checks fast) and the Firestore profile (source of truth + UI).
+async function applyRole(uid, role, municipality, barangay) {
+  await admin.auth().setCustomUserClaims(uid, { role });
+  const profile = { role };
+  if (municipality !== undefined && municipality !== null) {
+    profile.municipality = municipality;
+  }
+  // Barangay only means anything for a barangay_admin; clear it otherwise so a
+  // re-scoped account never keeps a stale barangay grant.
+  profile.barangay = role === "barangay_admin" ? barangay || "" : null;
+  await admin.firestore().collection("users").doc(uid).set(profile, { merge: true });
+}
+
+// ── Set Admin Role (direct) ──────────────────────────────────────────────────
+// Direct role assignment is now a SUPER-ADMIN-only power. Everyone below the
+// super admin must go through the nominate → approve workflow (roleRequests +
+// onRoleRequestDecision). This keeps a single accountable approver for every
+// elevation and prevents a provincial admin from unilaterally minting admins.
 exports.setAdminRole = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Must be authenticated.");
   }
-
-  const callerRole = request.auth.token.role;
-  const allowedCallers = ["admin", "provincial_admin"];
-
-  if (!allowedCallers.includes(callerRole)) {
-    throw new HttpsError("permission-denied", "Only admins can assign roles.");
+  if (request.auth.token.role !== "super_admin") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only a super admin may assign roles directly. Use nominate → approve."
+    );
   }
 
-  const { uid, role } = request.data;
+  const { uid, role, municipality, barangay } = request.data;
   if (!uid) throw new HttpsError("invalid-argument", "UID is required.");
+  if (!VALID_ROLES.includes(role)) {
+    throw new HttpsError("invalid-argument", `Invalid role: ${role}`);
+  }
 
-  const validRoles = ["admin", "municipal_admin", "provincial_admin", "citizen"];
-  const targetRole = validRoles.includes(role) ? role : "municipal_admin";
+  await applyRole(uid, role, municipality, barangay);
+  await admin.firestore().collection("audit_logs").add({
+    action: "role_assigned_direct",
+    targetUid: uid,
+    role,
+    municipality: municipality || null,
+    barangay: barangay || null,
+    decidedBy: request.auth.uid,
+    at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { message: `User ${uid} role set to ${role}.` };
+});
 
-  await admin.auth().setCustomUserClaims(uid, { role: targetRole });
+// ── Role-request approval (#8: nominate → super-admin approval) ───────────────
+// An admin NOMINATES a user for a role by creating a roleRequests document
+// (status 'pending'). A super_admin approves or rejects it. Firestore rules
+// forbid clients from writing the user's `role` field directly — the role only
+// changes here, server-side, when a request is approved. That gives every
+// elevation a single accountable approver and an immutable audit trail.
+exports.onRoleRequestDecision = onDocumentUpdated(
+  "roleRequests/{reqId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return; // only on the decision change
+    if (after.status !== "approved" && after.status !== "rejected") return;
 
-  // Also update Firestore user document
-  await admin.firestore().collection("users").doc(uid).set(
-    { role: targetRole },
-    { merge: true }
-  );
+    const db = admin.firestore();
+    if (
+      after.status === "approved" &&
+      after.targetUid &&
+      VALID_ROLES.includes(after.requestedRole)
+    ) {
+      await applyRole(
+        after.targetUid,
+        after.requestedRole,
+        after.municipality,
+        after.barangay
+      );
+    }
+    await db.collection("audit_logs").add({
+      action: after.status === "approved" ? "role_request_approved" : "role_request_rejected",
+      targetUid: after.targetUid || null,
+      role: after.requestedRole || null,
+      municipality: after.municipality || null,
+      barangay: after.barangay || null,
+      nominatedBy: after.nominatedBy || null,
+      decidedBy: after.decidedBy || null,
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+);
 
-  return { message: `User ${uid} role set to ${targetRole}.` };
+// ── One-time migration: retire the legacy 'admin' role ───────────────────────
+// Promotes every remaining role:'admin' account to 'provincial_admin' (same
+// authority the rules always gave it) in both the Auth claim and the profile.
+// Super-admin only; safe to re-run (idempotent).
+exports.migrateLegacyAdmins = onCall(async (request) => {
+  if (!request.auth || request.auth.token.role !== "super_admin") {
+    throw new HttpsError("permission-denied", "Super admin only.");
+  }
+  const db = admin.firestore();
+  const snap = await db.collection("users").where("role", "==", "admin").get();
+  let migrated = 0;
+  for (const d of snap.docs) {
+    await applyRole(d.id, "provincial_admin", d.data().municipality, null);
+    migrated++;
+  }
+  await db.collection("audit_logs").add({
+    action: "legacy_admin_migration",
+    count: migrated,
+    decidedBy: request.auth.uid,
+    at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { migrated };
 });
 
 // ── Seed Demo Data ───────────────────────────────────────────────────────────

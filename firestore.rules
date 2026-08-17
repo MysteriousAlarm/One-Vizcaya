@@ -107,16 +107,22 @@ service cloud.firestore {
     // ─── User profiles ──────────────────────────────────────────────────────
     match /users/{userId} {
       allow read:   if isOwner(userId) || isAdmin();
-      // A user may create/update their OWN profile but must NOT set or change
-      // their own 'role' (privilege-escalation guard). Only provincial+ admins
-      // may assign roles. role() falls back to this field, so it must be
-      // write-protected against the owner.
+      // A user may create their OWN profile as a citizen; a provincial admin may
+      // create a citizen profile too. Assigning any ELEVATED role on create is a
+      // super-admin power (or the nominate → approve workflow), never a direct
+      // client write — role() falls back to this field, so it must be guarded.
       allow create: if (isOwner(userId)
                         && request.resource.data.get('role', 'citizen') == 'citizen')
-                    || isProvincialAdmin();
+                    || isSuperAdmin()
+                    || (isProvincialAdmin()
+                        && request.resource.data.get('role', 'citizen') == 'citizen');
       // A user may update their OWN profile but must NOT change their 'role'
       // (privilege guard) nor self-grant a 'certified' residency status — that
       // is only set server-side after an LGU admin approves a residency request.
+      // A provincial admin may edit a user's profile fields but NOT their role:
+      // role changes only happen server-side via onRoleRequestDecision /
+      // setAdminRole (#8 nominate → approve). super_admin bypass covers direct
+      // super-admin role edits.
       allow update: if (isOwner(userId)
                         && request.resource.data.get('role', 'citizen')
                            == resource.data.get('role', 'citizen')
@@ -124,7 +130,9 @@ service cloud.firestore {
                               == resource.data.get('residencyStatus', 'unverified')
                             || request.resource.data.get('residencyStatus', 'unverified')
                                  in ['unverified', 'gps_verified']))
-                    || isProvincialAdmin();
+                    || (isProvincialAdmin()
+                        && request.resource.data.get('role', 'citizen')
+                           == resource.data.get('role', 'citizen'));
       // A user may erase their OWN profile (RA 10173 right to erasure). Their
       // reports are NOT deletable here (see reports rule) — they are archived
       // and retained as official LGU records on account deletion.
@@ -284,6 +292,29 @@ service cloud.firestore {
                         && actorMunicipality() == resource.data.municipality
                         && actorBarangay() == resource.data.barangay);
       allow delete: if isProvincialAdmin();
+    }
+
+    // ─── Role requests (#8: nominate → super-admin approval) ─────────────────
+    // An admin NOMINATES a user for a role (create, status 'pending'); a
+    // super_admin approves/rejects (update → status). The actual role write
+    // happens ONLY server-side in onRoleRequestDecision, so no admin below the
+    // super admin can elevate anyone directly. The 'admin' (legacy) role is
+    // retired and may not be requested.
+    match /roleRequests/{reqId} {
+      allow read:   if isAdmin();
+      // Any municipal-or-higher admin may nominate. The request must name a
+      // target and a valid, non-legacy role, and start pending with the
+      // nominator stamped as themselves.
+      allow create: if isMunicipalAdmin()
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.nominatedBy == request.auth.uid
+                    && request.resource.data.targetUid is string
+                    && request.resource.data.requestedRole in
+                         ['citizen', 'barangay_admin', 'municipal_admin',
+                          'provincial_admin', 'super_admin'];
+      // Only a super_admin decides. (The super_admin bypass above already grants
+      // this; stated explicitly for clarity and in case the bypass is tightened.)
+      allow update, delete: if isSuperAdmin();
     }
   }
 }

@@ -38,7 +38,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   final ReportRepository _reportRepository = FirebaseReportRepository();
 
-  UserRole _currentUserRole = UserRole.admin;
+  UserRole _currentUserRole = UserRole.citizen;
   bool _isLoadingRole = true;
 
   ReportPriority? _filterPriority;
@@ -326,11 +326,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       onPressed: () async {
                                         Navigator.pop(ctx);
                                         await roleService.assignRole(
-                                            uid, selected);
-                                        if (mounted) {
-                                          ToastUtils.showSuccess(
-                                              'Role assigned to $name.');
-                                        }
+                                            uid, selected,
+                                            targetName: name);
                                       },
                                       style: ElevatedButton.styleFrom(
                                           backgroundColor: _activeLguColor,
@@ -365,8 +362,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       case UserRole.barangayAdmin:
         return const Text('Certifies residents & handles reports for their barangay',
             style: TextStyle(fontSize: 11));
-      case UserRole.admin:
-        return const Text('Legacy admin (view only)', style: TextStyle(fontSize: 11));
       case UserRole.municipalAdmin:
         return const Text('Manages reports & announcements for their municipality',
             style: TextStyle(fontSize: 11));
@@ -513,33 +508,56 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       appBar: AppBar(
         backgroundColor: headerColor,
         foregroundColor: Colors.white,
-        title: Text(
-          _isProvincialView
-              ? 'Provincial Dashboard — All Municipalities'
-              : '$muniName Admin Dashboard',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          overflow: TextOverflow.ellipsis,
+        // N15: keep the title from being harshly clipped — scale it down to fit
+        // instead of cutting it off. The scope (which town / province-wide) is
+        // also shown by the switcher action to the right.
+        title: Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _isProvincialView ? 'Provincial Dashboard' : '$muniName Admin',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              maxLines: 1,
+            ),
+          ),
         ),
         actions: [
-          if (_currentUserRole == UserRole.admin ||
+          // N14: a provincial/super admin can switch the dashboard to ANY
+          // municipality, or to the province-wide view, from one dropdown —
+          // instead of only toggling between their own town and "all".
+          if (_currentUserRole == UserRole.provincialAdmin ||
               _currentUserRole == UserRole.superAdmin)
-            Tooltip(
-              message: _isProvincialView
-                  ? 'Switch to Municipal View'
-                  : 'Switch to Provincial View',
-              child: IconButton(
-                icon: Icon(
-                  _isProvincialView
-                      ? Icons.location_city
-                      : Icons.map_outlined,
+            PopupMenuButton<String>(
+              tooltip: 'Switch municipality / province view',
+              icon: const Icon(Icons.swap_horiz),
+              onSelected: (value) => setState(() {
+                if (value == '__ALL__') {
+                  _isProvincialView = true;
+                } else {
+                  _isProvincialView = false;
+                  oneVizcayaState.setMunicipality(value);
+                }
+                _filterPriority = null;
+                _filterStatus = null;
+                _rebuildReportsStream();
+              }),
+              itemBuilder: (context) => [
+                CheckedPopupMenuItem<String>(
+                  value: '__ALL__',
+                  checked: _isProvincialView,
+                  child: const Text('🌍 All Municipalities (Province-Wide)'),
                 ),
-                onPressed: () => setState(() {
-                  _isProvincialView = !_isProvincialView;
-                  _filterPriority = null;
-                  _filterStatus = null;
-                  _rebuildReportsStream();
-                }),
-              ),
+                const PopupMenuDivider(),
+                ...AppConstants.municipalities.map(
+                  (m) => CheckedPopupMenuItem<String>(
+                    value: m,
+                    checked: !_isProvincialView && _activeMunicipalityName == m,
+                    child: Text(m),
+                  ),
+                ),
+              ],
             ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
@@ -4470,7 +4488,7 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                await roleService.assignRole(uid, selected);
+                await roleService.assignRole(uid, selected, targetName: name);
               },
               style: ElevatedButton.styleFrom(
                   backgroundColor: widget.lguColor,
@@ -4490,8 +4508,6 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
       case UserRole.barangayAdmin:
         return const Text('Certifies residents & handles reports for their barangay',
             style: TextStyle(fontSize: 11));
-      case UserRole.admin:
-        return const Text('Legacy admin (view only)', style: TextStyle(fontSize: 11));
       case UserRole.municipalAdmin:
         return const Text('Manages reports & announcements for their municipality',
             style: TextStyle(fontSize: 11));
@@ -4510,8 +4526,6 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
         return Colors.grey;
       case UserRole.barangayAdmin:
         return Colors.teal.shade600;
-      case UserRole.admin:
-        return Colors.blue;
       case UserRole.municipalAdmin:
         return Colors.green.shade700;
       case UserRole.provincialAdmin:
