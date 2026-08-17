@@ -7,8 +7,9 @@ class AuthRepository {
     if (user == null) return UserRole.citizen;
 
     final idTokenResult = await user.getIdTokenResult(true);
-    final role = idTokenResult.claims?['role'];
-    return role == 'admin' ? UserRole.admin : UserRole.citizen;
+    final role = idTokenResult.claims?['role'] as String?;
+    // Map every role claim (legacy 'admin' → provincialAdmin) via the shared parser.
+    return AppUser.roleFromString(role);
   }
 
   Future<AppUser?> getCurrentUser() async {

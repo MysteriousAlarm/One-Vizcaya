@@ -20,7 +20,7 @@ class AdminService {
   }
 
   /// Returns the Firestore-stored role for [uid].
-  /// Falls back to [UserRole.admin] for legacy hardcoded admins.
+  /// Falls back to [UserRole.citizen] when no admin role is set.
   Future<UserRole> getUserRole(String uid) async {
     try {
       final doc = await FirebaseFirestore.instance
