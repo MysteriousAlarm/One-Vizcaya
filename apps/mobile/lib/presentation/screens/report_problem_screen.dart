@@ -436,7 +436,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: rawLguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(rawLguColor),
         title: Text(
           '${AppStrings.get('reportProblem')} ${AppStrings.get('prepositionTo')} $activeMunicipalityName',
         ),

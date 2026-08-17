@@ -22,7 +22,7 @@ class AnnouncementsScreen extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(lguColor),
         title: const Text(
           'Announcements',
           style: TextStyle(fontWeight: FontWeight.w600),

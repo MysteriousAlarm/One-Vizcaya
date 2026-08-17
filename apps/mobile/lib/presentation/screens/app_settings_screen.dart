@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/utils/color_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:local_auth/local_auth.dart';
@@ -96,7 +97,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: _lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(_lguColor),
         title: const Text(
           'App Settings',
           style: TextStyle(fontWeight: FontWeight.w600),

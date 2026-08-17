@@ -106,7 +106,7 @@ class _SupportScreenState extends State<SupportScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(lguColor),
         title: Text(
           AppStrings.get('faqTitle'),
           style: const TextStyle(fontWeight: FontWeight.w600),
@@ -505,7 +505,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(lguColor),
         title: Text(AppStrings.get('notificationsTitle')),
       ),
       body: Align(

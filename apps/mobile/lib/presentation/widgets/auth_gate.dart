@@ -7,6 +7,7 @@ import '../screens/login_screen.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/setup_screen.dart';
 import '../screens/splash_screen.dart';
+import '../state/municipality_state.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -34,6 +35,12 @@ class _AuthGateState extends State<AuthGate> {
           .get();
       final name = doc.data()?['name'] as String? ?? '';
       final municipality = doc.data()?['municipality'] as String? ?? '';
+      // N1: open the app to the signed-in user's registered municipality
+      // instead of the persisted default (previously always "Bambang" on a
+      // fresh install). Only sync when the profile actually names a town.
+      if (municipality.trim().isNotEmpty) {
+        await oneVizcayaState.setMunicipality(municipality.trim());
+      }
       return name.trim().isEmpty || municipality.trim().isEmpty;
     } catch (_) {
       // On Firestore error, send to setup so user can fill in their profile

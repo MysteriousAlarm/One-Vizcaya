@@ -106,6 +106,7 @@ class _ReportStatusScreenState extends State<ReportStatusScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: activeLguColor,
+        foregroundColor: ColorUtils.readableTextOn(activeLguColor),
         title: Text('${AppStrings.get('myReportsTitle')} ${AppStrings.get('prepositionTo')} $activeMunicipalityName'),
         actions: [
           PopupMenuButton<ReportSort>(

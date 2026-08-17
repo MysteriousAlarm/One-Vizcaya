@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/color_utils.dart';
 import '../state/municipality_state.dart';
 
 /// The people behind One Vizcaya. The Lead Developer is featured first, followed
@@ -63,7 +64,7 @@ class DevelopersScreen extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: lguColor,
-        foregroundColor: Colors.white,
+        foregroundColor: ColorUtils.readableTextOn(lguColor),
         title: const Text('Developers'),
       ),
       body: ListView(
