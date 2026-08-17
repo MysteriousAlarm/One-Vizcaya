@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsersCard } from "@/components/users/UsersCard";
+import { RoleRequestsCard } from "@/components/users/RoleRequestsCard";
 import { useUsers } from "@/hooks/useUsers";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -29,6 +30,17 @@ function UsersPage() {
           <p className="text-[10px] text-muted-foreground">{new Date().toLocaleDateString("en-PH", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</p>
         </div>
       </div>
+
+      {user?.role === "super_admin" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Pending Role Nominations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RoleRequestsCard />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="pt-5">
