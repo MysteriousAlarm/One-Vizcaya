@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers, MapPin, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/authStore";
 import type { Report, Responder } from "@/types";
 
 // Imperatively recenters the map only when its inputs change (i.e. when a
@@ -75,11 +76,22 @@ interface MapViewProps {
 }
 
 export function MapView({ reports, responders }: MapViewProps) {
+  // N8: honour the dashboard's current scope. When an admin is viewing a single
+  // municipality (municipal admin, or a provincial admin who switched to a
+  // town), the map should default to — and follow — that town's center/zoom and
+  // label, instead of always opening on the whole province ("All Municipalities").
+  const viewAs = useAuthStore((s) => s.viewAs);
+  const viewMunicipality = useAuthStore((s) => s.viewMunicipality);
+  const scopedMuni = viewAs === "municipal" ? (viewMunicipality ?? "all") : "all";
+
   const [showHeatmap,    setShowHeatmap]    = useState(true);
   const [showZones,      setShowZones]      = useState(true);
   const [showResponders, setShowResponders] = useState(true);
   const [showPins,       setShowPins]       = useState(false);
-  const [muniFilter,     setMuniFilter]     = useState("all");
+  const [muniFilter,     setMuniFilter]     = useState(scopedMuni);
+
+  // Follow the dashboard scope when it changes (e.g. the admin switches town).
+  useEffect(() => { setMuniFilter(scopedMuni); }, [scopedMuni]);
   const [timeRange,      setTimeRange]      = useState<TimeRange>("all");
   const [selectedReport,    setSelectedReport]    = useState<Report | null>(null);
   const [selectedResponder, setSelectedResponder] = useState<Responder | null>(null);

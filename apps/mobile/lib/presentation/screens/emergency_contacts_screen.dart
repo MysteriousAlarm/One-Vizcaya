@@ -125,24 +125,24 @@ class EmergencyContactsScreen extends StatelessWidget {
       },
       {
         'name': 'BFP Alfonso Castañeda',
-        'number': '09171112222',
+        'number': '09171112222 #',
         'type': 'fire',
       },
       {'name': 'MDRRMO / PDRRMO', 'number': '09702410684', 'type': 'disaster'},
     ],
     'Ambaguio': [
       {'name': 'PNP Ambaguio', 'number': '09061675646', 'type': 'police'},
-      {'name': 'BFP Ambaguio', 'number': '09171113333', 'type': 'fire'},
+      {'name': 'BFP Ambaguio', 'number': '09171113333 #', 'type': 'fire'},
       {'name': 'MDRRMO / PDRRMO', 'number': '09650469390', 'type': 'disaster'},
     ],
     'Aritao': [
       {'name': 'PNP Aritao', 'number': '09164956244', 'type': 'police'},
-      {'name': 'BFP Aritao', 'number': '09171114444', 'type': 'fire'},
+      {'name': 'BFP Aritao', 'number': '09171114444 #', 'type': 'fire'},
       {'name': 'MDRRMO Aritao', 'number': '09979722741', 'type': 'disaster'},
     ],
     'Bagabag': [
       {'name': 'PNP Bagabag', 'number': '09175063958', 'type': 'police'},
-      {'name': 'BFP Bagabag', 'number': '09171115555', 'type': 'fire'},
+      {'name': 'BFP Bagabag', 'number': '09171115555 #', 'type': 'fire'},
       {'name': 'MDRRMO Bagabag', 'number': '09266324196', 'type': 'disaster'},
     ],
     'Bambang': [
@@ -171,7 +171,7 @@ class EmergencyContactsScreen extends StatelessWidget {
     ],
     'Diadi': [
       {'name': 'PNP Diadi', 'number': '09989673133', 'type': 'police'},
-      {'name': 'BFP Diadi', 'number': '09171116666', 'type': 'fire'},
+      {'name': 'BFP Diadi', 'number': '09171116666 #', 'type': 'fire'},
       {
         'name': 'Diadi Emergency Hospital',
         'number': '09228680843',
@@ -185,7 +185,7 @@ class EmergencyContactsScreen extends StatelessWidget {
         'number': '09989673134',
         'type': 'police',
       },
-      {'name': 'BFP Dupax del Norte', 'number': '09171117777', 'type': 'fire'},
+      {'name': 'BFP Dupax del Norte', 'number': '09171117777 #', 'type': 'fire'},
       {
         'name': 'Dupax District Hospital',
         'number': '0788081178',
@@ -195,12 +195,12 @@ class EmergencyContactsScreen extends StatelessWidget {
     ],
     'Dupax del Sur': [
       {'name': 'PNP Dupax del Sur', 'number': '09989673135', 'type': 'police'},
-      {'name': 'BFP Dupax del Sur', 'number': '09171118888', 'type': 'fire'},
+      {'name': 'BFP Dupax del Sur', 'number': '09171118888 #', 'type': 'fire'},
       {'name': 'MDRRMO / PDRRMO', 'number': '09175927920', 'type': 'disaster'},
     ],
     'Kasibu': [
       {'name': 'PNP Kasibu', 'number': '09055889533', 'type': 'police'},
-      {'name': 'BFP Kasibu', 'number': '09171119999', 'type': 'fire'},
+      {'name': 'BFP Kasibu', 'number': '09171119999 #', 'type': 'fire'},
       {
         'name': 'Kasibu Municipal Hospital',
         'number': '09273659546',
@@ -210,17 +210,17 @@ class EmergencyContactsScreen extends StatelessWidget {
     ],
     'Kayapa': [
       {'name': 'PNP Kayapa', 'number': '09175168649', 'type': 'police'},
-      {'name': 'BFP Kayapa', 'number': '09172221111', 'type': 'fire'},
+      {'name': 'BFP Kayapa', 'number': '09172221111 #', 'type': 'fire'},
       {'name': 'MDRRMO Kayapa', 'number': '09164946926', 'type': 'disaster'},
     ],
     'Quezon': [
       {'name': 'PNP Quezon', 'number': '09351346735', 'type': 'police'},
-      {'name': 'BFP Quezon', 'number': '09172223333', 'type': 'fire'},
+      {'name': 'BFP Quezon', 'number': '09172223333 #', 'type': 'fire'},
       {'name': 'MDRRMO Quezon', 'number': '09068606785', 'type': 'disaster'},
     ],
     'Santa Fe': [
       {'name': 'PNP Santa Fe', 'number': '09164625062', 'type': 'police'},
-      {'name': 'BFP Santa Fe', 'number': '09172224444', 'type': 'fire'},
+      {'name': 'BFP Santa Fe', 'number': '09172224444 #', 'type': 'fire'},
       {'name': 'MDRRMO Santa Fe', 'number': '09562465185', 'type': 'disaster'},
     ],
     'Solano': [
@@ -232,7 +232,7 @@ class EmergencyContactsScreen extends StatelessWidget {
     ],
     'Villaverde': [
       {'name': 'PNP Villaverde', 'number': '09062683761', 'type': 'police'},
-      {'name': 'BFP Villaverde', 'number': '09172225555', 'type': 'fire'},
+      {'name': 'BFP Villaverde', 'number': '09172225555 #', 'type': 'fire'},
       {
         'name': 'MDRRMO Villaverde',
         'number': '09178067038',
@@ -429,6 +429,14 @@ class EmergencyContactsScreen extends StatelessWidget {
   }
 
   Future<void> _makeCall(String phoneNumber) async {
+    // A trailing '#' marks a placeholder number that is NOT the verified line
+    // (N10). Never dial it — a wrong number in an emergency is worse than none.
+    if (phoneNumber.contains('#')) {
+      ToastUtils.showInfo(
+          'This contact is still being verified with the LGU. Please use the '
+          'Provincial or National hotlines below in the meantime.');
+      return;
+    }
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     try {
       if (await canLaunchUrl(launchUri)) {
@@ -538,6 +546,10 @@ class EmergencyContactsScreen extends StatelessWidget {
     final number = data['number'] ?? '';
     final type = data['type'] ?? 'general';
     final iconColor = _getColorForType(type, lguColor);
+    // A '#'-suffixed number is a placeholder pending LGU verification (N10):
+    // show a clear label instead of a fake number, and dim the call button.
+    final isPlaceholder = number.contains('#');
+    final subtitleText = isPlaceholder ? 'Number being verified' : number;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -566,23 +578,26 @@ class EmergencyContactsScreen extends StatelessWidget {
           maxLines: 1,
         ),
         subtitle: Text(
-          number,
+          subtitleText,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 15,
+            fontSize: isPlaceholder ? 13 : 15,
+            fontStyle: isPlaceholder ? FontStyle.italic : FontStyle.normal,
             color: Colors.grey.shade700,
           ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
         trailing: Tooltip(
-          message: 'Call',
+          message: isPlaceholder ? 'Being verified' : 'Call',
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.1),
+              color: (isPlaceholder ? Colors.grey : Colors.green)
+                  .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: IconButton(
-              icon: const Icon(Icons.call, color: Colors.green),
+              icon: Icon(Icons.call,
+                  color: isPlaceholder ? Colors.grey : Colors.green),
               onPressed: () => _makeCall(number),
             ),
           ),
