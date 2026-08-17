@@ -351,5 +351,29 @@ service cloud.firestore {
       // this; stated explicitly for clarity and in case the bypass is tightened.)
       allow update, delete: if isSuperAdmin();
     }
+
+    // ─── Emergency SOS beacons (live-location dispatch) ──────────────────────
+    // A citizen presses SOS → an alert is created with their live position, then
+    // updated in place while the emergency is active. Admins see it in real time
+    // scoped to their tier (province-wide / their town / their barangay) so
+    // responders can be dispatched to the exact spot — even if the caller can't
+    // speak. Location is sensitive PII: only the owner and in-scope admins read
+    // it, and it is only written by the owner (server bypass covers functions).
+    match /sos_alerts/{alertId} {
+      allow create: if isAuth()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'active';
+      allow read:   if isOwner(resource.data.uid)
+                    || isProvincialAdmin()
+                    || municipalScoped(resource.data)
+                    || barangayScoped(resource.data);
+      // The owner keeps their own beacon updated (live location, cancel); an
+      // in-scope admin updates its status (dispatched / resolved) + notes.
+      allow update: if isOwner(resource.data.uid)
+                    || isProvincialAdmin()
+                    || municipalScoped(resource.data)
+                    || barangayScoped(resource.data);
+      allow delete: if isOwner(resource.data.uid) || isProvincialAdmin();
+    }
   }
 }

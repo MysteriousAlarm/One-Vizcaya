@@ -15,6 +15,9 @@ import '../../domain/repositories/report_repository.dart';
 import '../../data/repositories_impl/firebase_report_repository.dart';
 import '../../data/services/admin_service.dart';
 import '../../data/services/role_service.dart';
+import '../../data/services/sos_service.dart';
+import '../../domain/models/sos_alert.dart';
+import 'sos_alerts_screen.dart';
 import '../../features/auth/domain/entities/app_user.dart';
 import '../../core/utils/toast_utils.dart';
 import '../../core/utils/color_utils.dart';
@@ -174,6 +177,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         _activeMunicipalityName,
       );
     }
+  }
+
+  // Open SOS emergencies in the acting admin's scope (same tiering as reports).
+  Stream<List<SosAlert>> _openSosStream() {
+    if (_isBarangayAdmin) {
+      return sosService.watchBarangayOpen(
+          _activeMunicipalityName, _currentUserBarangay);
+    }
+    if (_isProvincialView) {
+      return sosService.watchProvincialOpen();
+    }
+    return sosService.watchMunicipalOpen(_activeMunicipalityName);
+  }
+
+  // Real-time red banner shown above every tab whenever there are open SOS
+  // beacons in scope — one tap opens the live dispatch list.
+  Widget _buildSosBanner() {
+    return StreamBuilder<List<SosAlert>>(
+      stream: _openSosStream(),
+      builder: (context, snap) {
+        final n = snap.data?.length ?? 0;
+        if (n == 0) return const SizedBox.shrink();
+        return Material(
+          color: const Color(0xFFC62828),
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SosAlertsScreen(
+                  stream: _openSosStream(),
+                  headerColor: const Color(0xFFB71C1C),
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.sos_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      n == 1
+                          ? '1 active emergency — tap to dispatch'
+                          : '$n active emergencies — tap to dispatch',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showAddAnnouncementSheet() {
@@ -632,7 +694,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         },
       ),
 
-      body: TabBarView(
+      body: Column(
+        children: [
+          _buildSosBanner(),
+          Expanded(
+            child: TabBarView(
         controller: tabController,
         children: [
           // ── Tab 1: Reports ──
@@ -778,6 +844,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           // ── Tab 4: Users (provincial + super admin only) ──
           if (_canSeeUsers) _RoleManagementTab(lguColor: lguColor),
+        ],
+            ),
+          ),
         ],
       ),
     );

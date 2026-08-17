@@ -941,6 +941,82 @@ exports.onNewAnnouncement = onDocumentCreated(
   }
 );
 
+// ── Emergency SOS: alert responders the instant a beacon is created ──────────
+// When a citizen presses SOS, push a high-priority notification to every admin
+// who can act on it — provincial/super admins (province-wide), the municipal
+// admin of the caller's town, and the barangay admin of the caller's barangay —
+// so dispatch starts immediately instead of waiting for someone to be watching
+// a screen. The push carries the coordinates so it can deep-link to the map.
+exports.onSosAlertCreated = onDocumentCreated(
+  "sos_alerts/{alertId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const db = admin.firestore();
+    const municipality = data.municipality || "";
+    const barangay = data.barangay || "";
+
+    // Admin roles are held by very few users, so query by role and filter scope
+    // in memory — avoids scanning a whole town's citizens.
+    const [provSnap, muniSnap, brgySnap] = await Promise.all([
+      db.collection("users")
+        .where("role", "in", ["provincial_admin", "admin", "super_admin"]).get(),
+      db.collection("users").where("role", "==", "municipal_admin").get(),
+      db.collection("users").where("role", "==", "barangay_admin").get(),
+    ]);
+
+    const tokens = new Set();
+    provSnap.forEach((d) => { if (d.data().fcmToken) tokens.add(d.data().fcmToken); });
+    muniSnap.forEach((d) => {
+      const u = d.data();
+      if (u.fcmToken && u.municipality === municipality) tokens.add(u.fcmToken);
+    });
+    brgySnap.forEach((d) => {
+      const u = d.data();
+      if (u.fcmToken && u.municipality === municipality &&
+          (u.barangay || "") === barangay) {
+        tokens.add(u.fcmToken);
+      }
+    });
+
+    const list = Array.from(tokens);
+    if (list.length === 0) {
+      console.log("SOS created but no responder tokens in scope.");
+      return;
+    }
+
+    const where = [
+      barangay ? `Brgy. ${barangay}` : null,
+      municipality || null,
+    ].filter(Boolean).join(", ");
+    const body = `${data.name || "A resident"} needs help${where ? ` in ${where}` : ""}. Tap to dispatch.`;
+
+    for (let i = 0; i < list.length; i += 500) {
+      await admin.messaging().sendEachForMulticast({
+        tokens: list.slice(i, i + 500),
+        notification: { title: "🚨 EMERGENCY SOS", body },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "one_vizcaya_broadcasts",
+            priority: "max",
+            sound: "default",
+            color: "#C62828",
+          },
+        },
+        data: {
+          type: "sos_alert",
+          alertId: event.params.alertId,
+          lat: data.lat != null ? String(data.lat) : "",
+          lng: data.lng != null ? String(data.lng) : "",
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+        },
+      }).catch((e) => console.error("SOS FCM batch failed:", e));
+    }
+  }
+);
+
 /**
  * Interim "Import from link" helper for announcements. Given a public post URL
  * (e.g. the Governor's Office Facebook page, a news site, or a gov advisory),

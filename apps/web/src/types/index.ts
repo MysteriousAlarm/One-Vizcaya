@@ -102,6 +102,26 @@ export interface AuthUser {
   barangay?: string;
 }
 
+export type SosStatus = "active" | "dispatched" | "resolved" | "cancelled";
+
+// A live emergency beacon — a citizen's SOS with continuously-updated location.
+export interface SosAlert {
+  id: string;
+  uid: string;
+  name: string;
+  phone: string;
+  municipality: string;
+  barangay?: string;
+  lat?: number;
+  lng?: number;
+  accuracy?: number;
+  status: SosStatus;
+  note?: string;
+  tracking: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 // A nomination in the #8 workflow: an admin proposes a role for a user; a
 // super_admin approves/rejects. The role write happens server-side on approval.
 export interface RoleRequest {
