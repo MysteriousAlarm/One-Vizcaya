@@ -32,6 +32,10 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
   const [body, setBody] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [municipality, setMunicipality] = useState("all");
+  // Agency/source shown to residents as the author of the post (e.g.
+  // "PDRRMO Nueva Vizcaya", "Philstar"), instead of the logged-in admin's
+  // personal name. Defaults to the admin's name if left blank.
+  const [postedBy, setPostedBy] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState("");
@@ -43,7 +47,7 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
 
   const resetForm = () => {
     setTitle(""); setBody(""); setUrgent(false); setMunicipality("all");
-    setImportUrl(""); setSourceUrl(""); setImageUrl("");
+    setImportUrl(""); setSourceUrl(""); setImageUrl(""); setPostedBy("");
   };
 
   const handleImport = async () => {
@@ -59,8 +63,18 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
       if (data.title) setTitle(data.title.slice(0, 140));
       if (data.description) setBody(data.description);
       if (data.image) setImageUrl(data.image);
+      // Credit the original source as the author (e.g. "Philstar") so the post
+      // reads like the app's agency-sourced announcements, not "posted by <admin>".
+      if (data.siteName) setPostedBy(data.siteName);
       setSourceUrl(data.url || url);
-      toast({ title: "Imported — review before posting", variant: "success" as never });
+      const bodyMissing = !data.description;
+      toast({
+        title: bodyMissing ? "Imported title only" : "Imported — review before posting",
+        description: bodyMissing
+          ? "This link (often Facebook) hides its text behind a login. Paste the message body manually."
+          : undefined,
+        variant: "success" as never,
+      });
     } catch {
       toast({ title: "Couldn't import that link", description: "Paste the text manually instead.", variant: "destructive" });
     } finally {
@@ -78,7 +92,7 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
         urgent,
         isUrgent: urgent,
         municipality,
-        postedBy: user.name,
+        postedBy: postedBy.trim() || user.name,
         ...(sourceUrl ? { sourceUrl, sourceLabel: "View original post" } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       });
@@ -193,6 +207,14 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
             <div className="space-y-1">
               <Label className="text-xs">Message *</Label>
               <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={4} className="resize-none" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Posted by (agency / source)</Label>
+              <Input
+                value={postedBy}
+                onChange={(e) => setPostedBy(e.target.value)}
+                placeholder={`e.g. PDRRMO Nueva Vizcaya — defaults to ${user?.name ?? "your name"}`}
+              />
             </div>
             {imageUrl && (
               <div className="space-y-1">

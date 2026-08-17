@@ -892,19 +892,33 @@ exports.fetchLinkPreview = onCall(async (request) => {
       .replace(/&quot;/g, '"')
       .replace(/&#0?39;|&apos;/gi, "'")
       .replace(/&#x27;/gi, "'")
+      .replace(/&nbsp;/gi, " ")
+      // Any remaining decimal / hex numeric entity → its character.
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+      .replace(/\s+/g, " ")
       .trim();
 
+  // Read a meta tag's content in either attribute order. The closing quote is
+  // matched with a backreference (\1) so a value that contains the *other*
+  // quote — e.g. content="Mayor's office announced…" — is captured in full
+  // instead of being truncated at the first apostrophe (the N4 bug).
   const meta = (prop) => {
-    const a = new RegExp(
-      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`,
-      "i"
-    );
-    const b = new RegExp(
-      `<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`,
-      "i"
-    );
-    const m = html.match(a) || html.match(b);
-    return m ? decode(m[1]) : "";
+    const patterns = [
+      new RegExp(
+        `<meta[^>]+(?:property|name)=["']${prop}["'][^>]*?content=(["'])([\\s\\S]*?)\\1`,
+        "i"
+      ),
+      new RegExp(
+        `<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]*?(?:property|name)=["']${prop}["']`,
+        "i"
+      ),
+    ];
+    for (const re of patterns) {
+      const m = html.match(re);
+      if (m) return decode(m[2]);
+    }
+    return "";
   };
 
   const titleTag = () => {
@@ -912,11 +926,37 @@ exports.fetchLinkPreview = onCall(async (request) => {
     return m ? decode(m[1]) : "";
   };
 
+  // Last-resort body: pull the first few real paragraphs from the article so a
+  // news link still fills the message even when the page ships no
+  // og:description / twitter:description (common on some CMSs).
+  const firstParagraphs = () => {
+    const cleaned = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ");
+    const ps = [...cleaned.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((m) => decode(m[1].replace(/<[^>]+>/g, " ")))
+      .filter((t) => t.length > 40);
+    return ps.slice(0, 3).join("\n\n");
+  };
+
+  let siteName = meta("og:site_name");
+  if (!siteName) {
+    try {
+      siteName = new URL(url).hostname.replace(/^www\./i, "");
+    } catch (_) {
+      siteName = "";
+    }
+  }
+
   return {
-    title: meta("og:title") || titleTag(),
-    description: meta("og:description") || meta("description"),
-    image: meta("og:image") || meta("og:image:url"),
-    siteName: meta("og:site_name"),
+    title: meta("og:title") || meta("twitter:title") || titleTag(),
+    description:
+      meta("og:description") ||
+      meta("twitter:description") ||
+      meta("description") ||
+      firstParagraphs(),
+    image: meta("og:image") || meta("og:image:url") || meta("twitter:image"),
+    siteName,
     url: meta("og:url") || url,
   };
 });

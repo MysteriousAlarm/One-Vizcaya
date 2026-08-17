@@ -4,7 +4,7 @@ import {
   onSnapshot, doc, updateDoc, Timestamp, arrayUnion, deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Report, ReportNote, ReportStatus } from "@/types";
+import type { Report, ReportNote, ReportStatus, HandlingLevel } from "@/types";
 
 function toDate(val: unknown): Date {
   if (val instanceof Timestamp) return val.toDate();
@@ -43,6 +43,8 @@ function toReport(d: {
     satisfactionRating:data.satisfactionRating as number | undefined,
     imageUrl:          data.imageUrl as string | undefined,
     lastModified:      toDate(data.lastModified),
+    handlingLevel:     (data.handlingLevel as HandlingLevel) ?? "municipal",
+    escalatedToProvince: (data.escalatedToProvince as boolean) ?? false,
   };
 }
 
@@ -76,6 +78,27 @@ export async function updateReportStatus(userId: string, reportId: string, statu
   await updateDoc(doc(db, "users", userId, "reports", reportId), {
     status,
     lastModified: Timestamp.now(),
+  });
+}
+
+// Transfer/route a report to a different administrative tier. Mirrors the
+// mobile FirebaseReportRepository.transferToLevel: keep escalatedToProvince in
+// sync (true for provincial + Region II) so the province-wide view/badges keep
+// working, and stamp who escalated it and when.
+export async function transferReportLevel(
+  userId: string,
+  reportId: string,
+  level: HandlingLevel,
+  escalatedBy?: string,
+) {
+  const escalated = level === "provincial" || level === "region_ii";
+  await updateDoc(doc(db, "users", userId, "reports", reportId), {
+    handlingLevel: level,
+    escalatedToProvince: escalated,
+    lastModified: Timestamp.now(),
+    ...(escalated
+      ? { escalatedAt: Timestamp.now(), escalatedBy: escalatedBy ?? null }
+      : {}),
   });
 }
 

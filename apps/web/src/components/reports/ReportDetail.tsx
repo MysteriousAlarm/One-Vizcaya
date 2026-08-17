@@ -9,12 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { updateReportStatus, assignResponder, addReportNote, deleteReport } from "@/hooks/useReports";
+import { updateReportStatus, assignResponder, addReportNote, deleteReport, transferReportLevel } from "@/hooks/useReports";
 import { useResponders } from "@/hooks/useResponders";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "@/hooks/useToast";
 import { cn, timeAgo, authorColor } from "@/lib/utils";
-import type { Report, ReportStatus } from "@/types";
+import type { Report, ReportStatus, HandlingLevel } from "@/types";
+
+// Mirrors the mobile HandlingLevel enum — the four administrative tiers a
+// report can be routed through.
+const HANDLING_LEVELS: { value: HandlingLevel; label: string; hint: string }[] = [
+  { value: "barangay",   label: "Barangay",   hint: "Very local, low-risk matters a barangay can resolve." },
+  { value: "municipal",  label: "Municipal",  hint: "Town-wide services & infrastructure beyond one barangay." },
+  { value: "provincial", label: "Provincial", hint: "High-impact or cross-municipal incidents needing provincial resources." },
+  { value: "region_ii",  label: "Region II",  hint: "National/regional mandate — DPWH Region II, region-wide calamities." },
+];
+
+const HANDLING_LABEL: Record<HandlingLevel, string> = {
+  barangay: "Barangay", municipal: "Municipal", provincial: "Provincial", region_ii: "Region II",
+};
 
 const STATUS_OPTIONS: { value: ReportStatus; label: string }[] = [
   { value: "reported",     label: "Reported" },
@@ -56,6 +69,7 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
   const { responders } = useResponders();
   const [status, setStatus] = useState<ReportStatus | "">(report?.status ?? "");
   const [assigned, setAssigned] = useState<string>(report?.assignedResponder ?? "");
+  const [level, setLevel] = useState<HandlingLevel>(report?.handlingLevel ?? "municipal");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -65,6 +79,7 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
     if (report) {
       setStatus(report.status);
       setAssigned(report.assignedResponder ?? "");
+      setLevel(report.handlingLevel ?? "municipal");
     }
     setNote("");
   }, [report]);
@@ -79,6 +94,19 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
     } catch {
       setAssigned(prev);
       toast({ title: "Failed to assign responder", variant: "destructive" });
+    }
+  };
+
+  const handleTransfer = async (next: HandlingLevel) => {
+    if (!report || next === level) return;
+    const prev = level;
+    setLevel(next);
+    try {
+      await transferReportLevel(report.userId, report.id, next, user?.uid);
+      toast({ title: `Routed to ${HANDLING_LABEL[next]} level`, variant: "success" as never });
+    } catch {
+      setLevel(prev);
+      toast({ title: "Failed to route report", variant: "destructive" });
     }
   };
 
@@ -143,6 +171,9 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
               </Badge>
               <Badge variant={STATUS_VARIANT[report.status]} className="text-[10px] capitalize">
                 {report.status.replace("_", " ")}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {HANDLING_LABEL[level]}
               </Badge>
             </DialogTitle>
           </DialogHeader>
@@ -234,6 +265,28 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
                     Currently assigned: <span className="font-medium text-foreground">{assigned}</span> — saved automatically.
                   </p>
                 )}
+              </div>
+
+              {/* Route / transfer between administrative tiers (parity with the
+                  mobile admin's 4-level routing). Escalating to Provincial or
+                  Region II makes the report appear in the province-wide view. */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Route / Transfer Level</p>
+                <Select value={level} onValueChange={(v) => handleTransfer(v as HandlingLevel)}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HANDLING_LEVELS.map((lvl) => (
+                      <SelectItem key={lvl.value} value={lvl.value} className="text-sm">
+                        {lvl.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {HANDLING_LEVELS.find((l) => l.value === level)?.hint}
+                </p>
               </div>
 
               <Separator />
