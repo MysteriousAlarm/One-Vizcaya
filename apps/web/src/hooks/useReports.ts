@@ -4,6 +4,7 @@ import {
   onSnapshot, doc, updateDoc, Timestamp, arrayUnion, deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuthStore } from "@/stores/authStore";
 import type { Report, ReportNote, ReportStatus, HandlingLevel } from "@/types";
 
 function toDate(val: unknown): Date {
@@ -51,6 +52,12 @@ function toReport(d: {
 export function useReports(municipality: string | null) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const user = useAuthStore((s) => s.user);
+  // A Barangay admin is confined to their own barangay: the security rules only
+  // authorise a report read when the query also filters by their barangay, so
+  // add that constraint (otherwise the whole collectionGroup read is denied).
+  const scopedBarangay =
+    user?.role === "barangay_admin" ? (user.barangay ?? "") : null;
 
   useEffect(() => {
     const base = collectionGroup(db, "reports");
@@ -58,9 +65,14 @@ export function useReports(municipality: string | null) {
     // Municipal admin has approved for escalation (escalatedToProvince == true).
     // A specific-municipality view still shows all of that town's reports so the
     // Municipal admin can triage and approve them.
-    const q = municipality
-      ? query(base, where("municipality", "==", municipality), orderBy("reportedAt", "desc"), limit(256))
-      : query(base, where("escalatedToProvince", "==", true), orderBy("reportedAt", "desc"), limit(256));
+    const q = scopedBarangay !== null && municipality
+      ? query(base,
+          where("municipality", "==", municipality),
+          where("barangay", "==", scopedBarangay),
+          orderBy("reportedAt", "desc"), limit(256))
+      : municipality
+        ? query(base, where("municipality", "==", municipality), orderBy("reportedAt", "desc"), limit(256))
+        : query(base, where("escalatedToProvince", "==", true), orderBy("reportedAt", "desc"), limit(256));
 
     const unsub = onSnapshot(
       q,
@@ -69,7 +81,7 @@ export function useReports(municipality: string | null) {
     );
 
     return unsub;
-  }, [municipality]);
+  }, [municipality, scopedBarangay]);
 
   return { reports, loading };
 }

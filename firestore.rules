@@ -100,6 +100,14 @@ service cloud.firestore {
         && actorBarangay() == data.get('barangay', '');
     }
 
+    // A Municipal admin may act ONLY on records in their OWN municipality — they
+    // must not reach another town's reports/dashboard. Provincial+ are unscoped.
+    // [data] is a document's data map that carries a `municipality` field.
+    function municipalScoped(data) {
+      return role() == 'municipal_admin'
+        && actorMunicipality() == data.municipality;
+    }
+
     // True when this report update is flipping escalatedToProvince false → true
     // (i.e. the Municipal → Provincial approval handoff).
     function approvingEscalation() {
@@ -152,7 +160,9 @@ service cloud.firestore {
       // verified submitter identity (userId == the owning uid + a phone number).
       // Enforced here at the data layer, not just in the UI.
       match /reports/{reportId} {
-        allow read:   if isOwner(userId) || isAdmin()
+        allow read:   if isOwner(userId)
+                      || isProvincialAdmin()
+                      || municipalScoped(resource.data)
                       || barangayScoped(resource.data);
         // Residency gate (Option 3): only a verified Nueva Vizcaya resident may
         // file a report. residencyStatus must be gps_verified or certified.
@@ -171,12 +181,12 @@ service cloud.firestore {
         // report's own municipality, and must stamp escalatedBy with their uid.
         // All other updates follow the normal owner/admin permissions. (super
         // admin is covered by the bypass above.)
-        allow update: if (isAdmin() && !approvingEscalation())
-                      || isOwner(userId)
+        allow update: if (isProvincialAdmin() && !approvingEscalation())
+                      || (municipalScoped(resource.data) && !approvingEscalation())
                       || (barangayScoped(resource.data) && !approvingEscalation())
+                      || isOwner(userId)
                       || (approvingEscalation()
-                          && isMunicipalAdmin()
-                          && actorMunicipality() == resource.data.municipality
+                          && municipalScoped(resource.data)
                           && request.resource.data.escalatedBy == request.auth.uid);
         allow delete: if isProvincialAdmin();
       }
@@ -223,18 +233,29 @@ service cloud.firestore {
     // Owners still read their own reports through the users/{uid}/reports rule.
     // Admins can read everything for triage.
     match /{path=**}/reports/{reportId} {
-      allow read:   if isAdmin()
+      allow read:   if isProvincialAdmin()
+                    || municipalScoped(resource.data)
                     || barangayScoped(resource.data)
                     || (isAuth() && resource.data.status == 'solved');
-      allow update: if isAdmin()
-                    || (barangayScoped(resource.data) && !approvingEscalation());
+      allow update: if (isProvincialAdmin() && !approvingEscalation())
+                    || (municipalScoped(resource.data) && !approvingEscalation())
+                    || (barangayScoped(resource.data) && !approvingEscalation())
+                    || (approvingEscalation()
+                        && municipalScoped(resource.data)
+                        && request.resource.data.escalatedBy == request.auth.uid);
       allow delete: if isProvincialAdmin();
     }
 
     // ─── Announcements ───────────────────────────────────────────────────────
     match /announcements/{announcementId} {
       allow read:          if isAuth();
-      allow create, update: if isMunicipalAdmin();
+      // Provincial+ may post for any scope (incl. province-wide). A Municipal
+      // admin may ONLY post announcements tagged with their OWN municipality —
+      // not "all" and not another town.
+      allow create, update: if isProvincialAdmin()
+                            || (role() == 'municipal_admin'
+                                && request.resource.data.get('municipality', '')
+                                   == actorMunicipality());
       allow delete:        if isProvincialAdmin();
     }
 

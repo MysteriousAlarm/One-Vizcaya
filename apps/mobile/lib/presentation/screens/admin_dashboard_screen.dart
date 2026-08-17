@@ -117,8 +117,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
   }
 
-  String get _activeMunicipalityName =>
-      oneVizcayaState.selectedMunicipality.value;
+  String get _activeMunicipalityName {
+    // SECURITY: Municipal & Barangay admins are PINNED to their own municipality.
+    // They must not be able to open another town's dashboard by changing the
+    // home-screen municipality picker (which drives the global selection). Only
+    // Provincial/Super admins may switch towns (via the N14 switcher).
+    if ((_currentUserRole == UserRole.municipalAdmin ||
+            _currentUserRole == UserRole.barangayAdmin) &&
+        _currentUserMunicipality.isNotEmpty) {
+      return _currentUserMunicipality;
+    }
+    return oneVizcayaState.selectedMunicipality.value;
+  }
 
   Color get _activeLguColor =>
       oneVizcayaState.activeTheme['appBarColor'] as Color;
@@ -316,73 +326,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                             if (mounted) Navigator.pop(sheetCtx);
 
-                            // Reuse the existing role dialog from _RoleManagementTab
-                            // by opening it directly
-                            UserRole selected = currentRole;
+                            // Role assignment with municipality/barangay scope.
                             await showDialog(
                               context: context,
-                              builder: (ctx) => StatefulBuilder(
-                                builder: (ctx, setDialogState) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16)),
-                                  title: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Assign Role',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold)),
-                                      Text(name,
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.normal,
-                                              color: Colors.grey.shade600)),
-                                      Text(phone,
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade400)),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: UserRole.values.map((role) {
-                                      return RadioListTile<UserRole>(
-                                        dense: true,
-                                        activeColor: _activeLguColor,
-                                        title: Text(role.displayName,
-                                            style: const TextStyle(
-                                                fontSize: 14)),
-                                        subtitle: _roleDescription(role),
-                                        value: role,
-                                        groupValue: selected,
-                                        onChanged: (v) {
-                                          if (v != null) {
-                                            setDialogState(
-                                                () => selected = v);
-                                          }
-                                        },
-                                      );
-                                    }).toList(),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx),
-                                        child: const Text('Cancel')),
-                                    ElevatedButton(
-                                      onPressed: () async {
-                                        Navigator.pop(ctx);
-                                        await roleService.assignRole(
-                                            uid, selected,
-                                            targetName: name);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: _activeLguColor,
-                                          foregroundColor: Colors.white),
-                                      child: const Text('Save'),
-                                    ),
-                                  ],
-                                ),
+                              builder: (ctx) => _RoleAssignDialog(
+                                uid: uid,
+                                name: name,
+                                phone: phone,
+                                currentRole: currentRole,
+                                accent: _activeLguColor,
+                                subtitleBuilder: _roleDescription,
                               ),
                             );
                           } catch (e) {
@@ -4547,58 +4500,14 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
       String uid,
       String name,
       UserRole currentRole) {
-    UserRole selected = currentRole;
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Assign Role',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(name,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.normal,
-                      color: Colors.grey.shade600)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: UserRole.values.map((role) {
-              return RadioListTile<UserRole>(
-                dense: true,
-                activeColor: widget.lguColor,
-                title: Text(role.displayName,
-                    style: const TextStyle(fontSize: 14)),
-                subtitle: _roleDescription(role),
-                value: role,
-                groupValue: selected,
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => selected = v);
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await roleService.assignRole(uid, selected, targetName: name);
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.lguColor,
-                  foregroundColor: Colors.white),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+      builder: (ctx) => _RoleAssignDialog(
+        uid: uid,
+        name: name,
+        currentRole: currentRole,
+        accent: widget.lguColor,
+        subtitleBuilder: _roleDescription,
       ),
     );
   }
@@ -4834,6 +4743,174 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
               );
             },
           ),
+        ),
+      ],
+    );
+  }
+}
+
+// Role assignment dialog with tier scope. Assigning a Municipal admin requires
+// a municipality; a Barangay admin requires a municipality AND a barangay, so
+// the account is actually scoped (an unscoped Barangay admin can see nothing).
+class _RoleAssignDialog extends StatefulWidget {
+  final String uid;
+  final String name;
+  final String phone;
+  final UserRole currentRole;
+  final Color accent;
+  final Widget? Function(UserRole) subtitleBuilder;
+
+  const _RoleAssignDialog({
+    required this.uid,
+    required this.name,
+    required this.currentRole,
+    required this.accent,
+    required this.subtitleBuilder,
+    this.phone = '',
+  });
+
+  @override
+  State<_RoleAssignDialog> createState() => _RoleAssignDialogState();
+}
+
+class _RoleAssignDialogState extends State<_RoleAssignDialog> {
+  late UserRole _selected = widget.currentRole;
+  String? _muni;
+  String? _brgy;
+  bool _saving = false;
+
+  bool get _needsMuni =>
+      _selected == UserRole.municipalAdmin ||
+      _selected == UserRole.barangayAdmin;
+  bool get _needsBrgy => _selected == UserRole.barangayAdmin;
+
+  Future<void> _save() async {
+    if (_needsMuni && (_muni == null || _muni!.isEmpty)) {
+      ToastUtils.showError('Pick a municipality for this role.');
+      return;
+    }
+    if (_needsBrgy && (_brgy == null || _brgy!.isEmpty)) {
+      ToastUtils.showError('Pick a barangay for a Barangay admin.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await roleService.assignRole(
+        widget.uid,
+        _selected,
+        targetName: widget.name,
+        targetPhone: widget.phone.isEmpty ? null : widget.phone,
+        municipality: _needsMuni ? _muni : null,
+        barangay: _needsBrgy ? _brgy : null,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brgys = _muni == null
+        ? const <String>[]
+        : (AppConstants.municipalityBarangays[_muni] ?? const <String>[]);
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Assign Role',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(widget.name,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.grey.shade600)),
+          if (widget.phone.isNotEmpty)
+            Text(widget.phone,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ...UserRole.values.map((role) => RadioListTile<UserRole>(
+                    dense: true,
+                    activeColor: widget.accent,
+                    title: Text(role.displayName,
+                        style: const TextStyle(fontSize: 14)),
+                    subtitle: widget.subtitleBuilder(role),
+                    value: role,
+                    groupValue: _selected,
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _selected = v;
+                          if (!_needsBrgy) _brgy = null;
+                        });
+                      }
+                    },
+                  )),
+              if (_needsMuni)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _muni,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Municipality',
+                        border: OutlineInputBorder()),
+                    items: AppConstants.municipalities
+                        .map((m) =>
+                            DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      _muni = v;
+                      _brgy = null; // town change invalidates barangay
+                    }),
+                  ),
+                ),
+              if (_needsBrgy)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _brgy,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                        labelText:
+                            _muni == null ? 'Pick municipality first' : 'Barangay',
+                        border: const OutlineInputBorder()),
+                    items: brgys
+                        .map((b) =>
+                            DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: _muni == null
+                        ? null
+                        : (v) => setState(() => _brgy = v),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: widget.accent, foregroundColor: Colors.white),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Text('Save'),
         ),
       ],
     );
