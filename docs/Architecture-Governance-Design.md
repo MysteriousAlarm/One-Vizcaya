@@ -120,10 +120,11 @@ oversees.
 | **System Steward** | PITD-designated | Technical administration; **cannot alter report content** |
 
 > **System-role mapping.** In `firestore.rules` these map to the custom-claim
-> roles `barangay_admin`, `municipal_admin`, `provincial_admin` / `admin`, and
-> `super_admin`. The "Municipal Dispatcher" and "Municipal Admin" distinction is
-> a workflow role inside the municipal tier. **[CONFIRM WITH PPDO/PITD]** the
-> exact offices that should hold each.
+> roles `barangay_admin`, `municipal_admin`, `provincial_admin`, and
+> `super_admin`. (An earlier `admin` role has been retired and migrated to
+> `provincial_admin`.) The "Municipal Dispatcher" and "Municipal Admin"
+> distinction is a workflow role inside the municipal tier. **[CONFIRM WITH
+> PPDO/PITD]** the exact offices that should hold each.
 
 ### 4.2 The Authority Principle
 
