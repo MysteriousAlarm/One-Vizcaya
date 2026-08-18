@@ -26,6 +26,8 @@ class ProblemReport {
   final DateTime? photoTimestamp;
   final double? photoLatitude;
   final double? photoLongitude;
+  // 'camera' (live capture, GPS-stamped) or 'gallery' (unverified).
+  final String? photoSource;
 
   // Escalation
   final bool escalatedToProvince;
@@ -66,6 +68,7 @@ class ProblemReport {
     this.photoTimestamp,
     this.photoLatitude,
     this.photoLongitude,
+    this.photoSource,
     this.escalatedToProvince = false,
     this.escalatedAt,
     this.escalatedBy,
@@ -133,6 +136,7 @@ class ProblemReport {
       photoTimestamp: (data['photoTimestamp'] as Timestamp?)?.toDate(),
       photoLatitude: (data['photoLatitude'] as num?)?.toDouble(),
       photoLongitude: (data['photoLongitude'] as num?)?.toDouble(),
+      photoSource: data['photoSource'] as String?,
       escalatedToProvince: data['escalatedToProvince'] as bool? ?? false,
       escalatedAt: (data['escalatedAt'] as Timestamp?)?.toDate(),
       escalatedBy: data['escalatedBy'] as String?,
@@ -165,6 +169,7 @@ class ProblemReport {
           : null,
       'photoLatitude': photoLatitude,
       'photoLongitude': photoLongitude,
+      'photoSource': photoSource,
       'escalatedToProvince': escalatedToProvince,
       'escalatedBy': escalatedBy,
       'escalatedAt': escalatedAt != null

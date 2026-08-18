@@ -21,6 +21,7 @@ import '../../domain/models/problem_report.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../../data/repositories_impl/firebase_report_repository.dart';
 import '../../data/services/geolocator_service.dart';
+import '../../data/services/geo_stamp_service.dart';
 import '../../data/services/offline_queue_service.dart';
 import '../../data/services/priority_service.dart';
 import '../state/municipality_state.dart';
@@ -64,6 +65,9 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
   DateTime? _photoTimestamp;
   double? _photoLatitude;
   double? _photoLongitude;
+  // 'camera' (live capture, GPS-stamped) or 'gallery' (unverified) — lets
+  // admins instantly trust the evidence.
+  String? _photoSource;
 
   // Residency gate (Option 3). Default 'grandfathered' so existing users (no
   // status field) are never blocked; only a confirmed 'unverified' status gates.
@@ -258,6 +262,10 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         'userPhone': user.phoneNumber,
         'isAnonymous': false,
         'barangay': _selectedBarangay,
+        'photoSource': _photoSource,
+        'photoLatitude': _photoLatitude,
+        'photoLongitude': _photoLongitude,
+        'photoTimestamp': _photoTimestamp?.toIso8601String(),
       };
       await OfflineQueueService().enqueue(queuePayload);
       ToastUtils.showInfo(
@@ -348,6 +356,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         photoTimestamp: _photoTimestamp,
         photoLatitude: _photoLatitude,
         photoLongitude: _photoLongitude,
+        photoSource: _photoSource,
         isAnonymous: false,
         barangay: _selectedBarangay,
       );
@@ -369,6 +378,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         _photoTimestamp = null;
         _photoLatitude = null;
         _photoLongitude = null;
+        _photoSource = null;
         _isSubmitting = false;
       });
 
@@ -690,6 +700,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                               _photoTimestamp = null;
                               _photoLatitude = null;
                               _photoLongitude = null;
+                              _photoSource = null;
                             }),
                             child: Container(
                               padding: const EdgeInsets.all(4),
@@ -933,18 +944,54 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           }
         }
 
+        File imageFile = File(pickedFile.path);
+
+        // Bake a GPS Map Camera-style stamp into a live capture so the evidence
+        // is self-describing (place, coordinates, time, Google-Maps QR).
+        bool stamped = false;
+        if (source == ImageSource.camera && lat != null && lng != null) {
+          final muni = oneVizcayaState.selectedMunicipality.value;
+          final place = [
+            if (_selectedBarangay != null && _selectedBarangay!.isNotEmpty)
+              'Brgy. $_selectedBarangay',
+            if (muni.isNotEmpty) muni,
+            'Nueva Vizcaya, PH',
+          ].join(', ');
+          final stampedBytes = await GeoStampService.stamp(
+            imageBytes: await imageFile.readAsBytes(),
+            lat: lat,
+            lng: lng,
+            placeLine: place,
+            takenAt: captureTime,
+          );
+          if (stampedBytes != null) {
+            final out = File('${pickedFile.path}_stamped.png');
+            await out.writeAsBytes(stampedBytes);
+            imageFile = out;
+            stamped = true;
+          }
+        }
+
         if (!mounted) return;
         setState(() {
-          _selectedImage = File(pickedFile.path);
+          _selectedImage = imageFile;
+          _photoSource = source == ImageSource.camera ? 'camera' : 'gallery';
           if (source == ImageSource.camera) {
             _photoTimestamp = captureTime;
             _photoLatitude = lat;
             _photoLongitude = lng;
+          } else {
+            _photoTimestamp = null;
+            _photoLatitude = null;
+            _photoLongitude = null;
+            _photoSource = null;
           }
         });
         ToastUtils.showSuccess(
           source == ImageSource.camera
-              ? 'Photo attached with timestamp & GPS'
+              ? (stamped
+                  ? 'Photo stamped with location, time & QR'
+                  : 'Photo attached with timestamp & GPS')
               : 'Photo attached successfully',
         );
       }

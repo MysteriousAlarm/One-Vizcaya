@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { Save, Trash2, User, MapPin, Clock, Tag, AlertCircle, Loader2, FileImage } from "lucide-react";
+import { Save, Trash2, User, MapPin, Clock, Tag, AlertCircle, Loader2, FileImage, Camera, Image as ImageIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -199,15 +199,35 @@ export function ReportDetail({ report, open, onClose }: ReportDetailProps) {
               {/* Photo */}
               {report.imageUrl && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <FileImage className="h-3 w-3" aria-hidden /> Attached Photo
-                  </p>
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                      <FileImage className="h-3 w-3" aria-hidden /> Attached Photo
+                    </p>
+                    {report.photoSource === "camera" ? (
+                      <span className="text-[10px] font-semibold text-green-700 bg-green-100 rounded px-1.5 py-0.5 flex items-center gap-1">
+                        <Camera className="h-3 w-3" /> Live camera · GPS-stamped
+                      </span>
+                    ) : report.photoSource === "gallery" ? (
+                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 flex items-center gap-1">
+                        <ImageIcon className="h-3 w-3" /> From gallery · unverified
+                      </span>
+                    ) : null}
+                  </div>
                   <img
                     src={report.imageUrl}
                     alt="Report photo"
-                    className="rounded-lg max-h-48 object-cover w-full border"
+                    className="rounded-lg max-h-64 object-contain w-full border bg-black/5"
                     loading="lazy"
                   />
+                  {report.photoSource === "camera" && report.photoLatitude != null && report.photoLongitude != null && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${report.photoLatitude},${report.photoLongitude}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <MapPin className="h-3 w-3" /> Open photo location in Google Maps
+                    </a>
+                  )}
                 </div>
               )}
 
