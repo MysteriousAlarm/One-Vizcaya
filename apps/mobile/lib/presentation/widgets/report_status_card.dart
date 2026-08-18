@@ -788,6 +788,46 @@ class _ReportStatusCardState extends State<ReportStatusCard>
                 // POLISH 3: Photo thumbnail with Hero tag
                 if (widget.report.imageUrl != null &&
                     widget.report.imageUrl!.isNotEmpty) ...[
+                  if (widget.report.photoSource != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      decoration: BoxDecoration(
+                        color: (widget.report.photoSource == 'camera'
+                                ? Colors.green
+                                : Colors.orange)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            widget.report.photoSource == 'camera'
+                                ? Icons.photo_camera
+                                : Icons.photo_library,
+                            size: 13,
+                            color: widget.report.photoSource == 'camera'
+                                ? Colors.green.shade700
+                                : Colors.orange.shade800,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            widget.report.photoSource == 'camera'
+                                ? 'Live camera · GPS-stamped'
+                                : 'From gallery · unverified',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: widget.report.photoSource == 'camera'
+                                  ? Colors.green.shade800
+                                  : Colors.orange.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   GestureDetector(
                     onTap: () =>
                         _openImageViewer(context, widget.report.imageUrl!),

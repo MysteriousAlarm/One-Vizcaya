@@ -33,6 +33,10 @@ export interface Report {
   assignedResponder?: string;
   satisfactionRating?: number;
   imageUrl?: string;
+  photoSource?: "camera" | "gallery";
+  photoLatitude?: number;
+  photoLongitude?: number;
+  photoTimestamp?: Date;
   lastModified: Date;
   handlingLevel: HandlingLevel;
   escalatedToProvince?: boolean;
