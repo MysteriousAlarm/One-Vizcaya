@@ -96,6 +96,8 @@ alter):
 | :--- | :--- | :--- |
 | **Escalation approved** (Municipal→Provincial) | `auditEscalationApproval` | reportId, municipality, **approvedBy**, time |
 | **Residency certified / rejected** | `onResidencyDecision` | targetUid, barangay, **decidedBy**, time |
+| **Role granted** (nominate → approve, or direct) | `onRoleRequestDecision` / `setAdminRole` | targetUid, role, municipality/barangay, **decidedBy**, time |
+| **SOS marked as abuse** | `onSosAlertUpdated` | targetUid, alertId, **decidedBy**, abuse count, time |
 | **Account deleted** (reports retained) | `onUserDeleted` | targetUid, municipality, reporter name, time |
 
 ---

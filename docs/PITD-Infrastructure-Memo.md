@@ -42,8 +42,8 @@ capabilities that the app relies on.
 | # | Control | Status today | Action |
 |---|---|---|---|
 | 1 | **App Check enforcement** (Play Integrity / DeviceCheck) on Firestore, Storage, Functions | Configured, **not enforced** | Turn on **Enforcement** so only the genuine, untampered app can call the backend |
-| 2 | **Security Rules at the data layer** (RBAC: Barangay→Municipal→Provincial→Region II) | Partially enforced | Complete rules so every authority boundary is enforced in the database, not just the UI |
-| 3 | **Audit logging** (who did what, when) | `audit_logs` collection exists | Write an immutable audit entry on every privileged action (approve, escalate, delete, role change) |
+| 2 | **Security Rules at the data layer** (RBAC: Barangay→Municipal→Provincial→Region II) | **Enforced** — role + municipality + barangay scoping; municipal admins confined to their town | Ongoing review as features are added |
+| 3 | **Audit logging** (who did what, when) | **Implemented** — immutable `audit_logs` written by Cloud Functions on escalation, residency, role approval, SOS-abuse, and account-deletion | Extend coverage to any new privileged action |
 | 4 | **Automated backups** | None | Enable **Firestore Point-in-Time Recovery (PITR)** + a **scheduled daily export to a locked Cloud Storage bucket** |
 | 5 | **Least-privilege IAM** | Default | Restrict GCP console/project access to named admins with 2FA; separate prod from dev |
 | 6 | **Admin 2FA** | Phone OTP | Add TOTP/authenticator second factor for all admin accounts (Identity Platform) |
