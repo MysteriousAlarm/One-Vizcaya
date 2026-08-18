@@ -6,9 +6,10 @@ import { MAPS_API_KEY, NV_CENTER, NV_ZOOM } from "@/lib/firebase";
 import { MUNICIPALITIES } from "@/data/municipalities";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, MapPin, Shield } from "lucide-react";
+import { Layers, MapPin, Shield, Hexagon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { barangayShapesOf, barangayNamesOf } from "@/lib/barangayGeo";
 import type { Report, Responder } from "@/types";
 
 // Imperatively recenters the map only when its inputs change (i.e. when a
@@ -88,10 +89,26 @@ export function MapView({ reports, responders }: MapViewProps) {
   const [showZones,      setShowZones]      = useState(true);
   const [showResponders, setShowResponders] = useState(true);
   const [showPins,       setShowPins]       = useState(false);
+  const [showBarangays,  setShowBarangays]  = useState(true);
   const [muniFilter,     setMuniFilter]     = useState(scopedMuni);
+  // N9: barangay drill-down within the selected municipality.
+  const [barangayFilter, setBarangayFilter] = useState("all");
 
   // Follow the dashboard scope when it changes (e.g. the admin switches town).
   useEffect(() => { setMuniFilter(scopedMuni); }, [scopedMuni]);
+  // A barangay only makes sense within one town — reset it whenever the
+  // municipality changes (including the scope-driven change above).
+  useEffect(() => { setBarangayFilter("all"); }, [muniFilter]);
+
+  // Barangay boundary shapes + names for the selected town (empty province-wide).
+  const barangayShapes = useMemo(
+    () => (muniFilter === "all" ? [] : barangayShapesOf(muniFilter)),
+    [muniFilter],
+  );
+  const barangayNames = useMemo(
+    () => (muniFilter === "all" ? [] : barangayNamesOf(muniFilter)),
+    [muniFilter],
+  );
   const [timeRange,      setTimeRange]      = useState<TimeRange>("all");
   const [selectedReport,    setSelectedReport]    = useState<Report | null>(null);
   const [selectedResponder, setSelectedResponder] = useState<Responder | null>(null);
@@ -105,7 +122,11 @@ export function MapView({ reports, responders }: MapViewProps) {
     return reports.filter((r) => r.reportedAt.getTime() >= cutoff);
   }, [reports, timeRange]);
 
-  const filteredReports    = useMemo(() => muniFilter === "all" ? timeFilteredReports : timeFilteredReports.filter((r) => r.municipality === muniFilter), [timeFilteredReports, muniFilter]);
+  const filteredReports    = useMemo(() => {
+    let out = muniFilter === "all" ? timeFilteredReports : timeFilteredReports.filter((r) => r.municipality === muniFilter);
+    if (barangayFilter !== "all") out = out.filter((r) => (r.barangay ?? "") === barangayFilter);
+    return out;
+  }, [timeFilteredReports, muniFilter, barangayFilter]);
   const filteredResponders = useMemo(() => muniFilter === "all" ? responders : responders.filter((r) => r.municipality === muniFilter), [responders, muniFilter]);
 
   // Weighted intensity per municipality (critical counts 4×, etc.)
@@ -128,11 +149,15 @@ export function MapView({ reports, responders }: MapViewProps) {
   const maxIntensity = useMemo(() => Math.max(...Object.values(intensityByMuni), 1), [intensityByMuni]);
   const maxCount     = useMemo(() => Math.max(...Object.values(countByMuni), 1),     [countByMuni]);
 
-  const mapCenter = useMemo(() =>
-    muniFilter !== "all"
+  const mapCenter = useMemo(() => {
+    if (barangayFilter !== "all") {
+      const b = barangayShapes.find((s) => s.barangay === barangayFilter);
+      if (b) return b.center;
+    }
+    return muniFilter !== "all"
       ? (MUNICIPALITIES.find((m) => m.name === muniFilter)?.center ?? NV_CENTER)
-      : NV_CENTER,
-  [muniFilter]);
+      : NV_CENTER;
+  }, [muniFilter, barangayFilter, barangayShapes]);
 
   // Convert GeoJSON [lng, lat] coordinate format to LatLngLiteral for the Polygon component
   const muniPolygons = useMemo(() =>
@@ -180,6 +205,21 @@ export function MapView({ reports, responders }: MapViewProps) {
           </SelectContent>
         </Select>
 
+        {/* Barangay drill-down — only meaningful once a town is chosen (N9). */}
+        {muniFilter !== "all" && barangayNames.length > 0 && (
+          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+            <SelectTrigger className="h-8 text-xs w-44" aria-label="Filter by barangay">
+              <SelectValue placeholder="All Barangays" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Barangays</SelectItem>
+              {barangayNames.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
           <SelectTrigger className="h-8 text-xs w-36" aria-label="Filter by time range">
             <SelectValue />
@@ -196,6 +236,9 @@ export function MapView({ reports, responders }: MapViewProps) {
           <ToggleButton active={showZones}      onClick={() => setShowZones(!showZones)}           icon={<span className="h-3.5 w-3.5 flex items-center justify-center text-[9px] font-black leading-none" aria-hidden>●</span>} label="Zones" />
           <ToggleButton active={showResponders} onClick={() => setShowResponders(!showResponders)} icon={<Shield  className="h-3.5 w-3.5" aria-hidden />} label="Responders" />
           <ToggleButton active={showPins}       onClick={() => setShowPins(!showPins)}             icon={<MapPin  className="h-3.5 w-3.5" aria-hidden />} label="Pins" />
+          {muniFilter !== "all" && (
+            <ToggleButton active={showBarangays} onClick={() => setShowBarangays(!showBarangays)}   icon={<Hexagon className="h-3.5 w-3.5" aria-hidden />} label="Barangays" />
+          )}
         </div>
 
         <span className="text-xs text-muted-foreground ml-auto hidden sm:block">
@@ -215,7 +258,7 @@ export function MapView({ reports, responders }: MapViewProps) {
           >
             <CameraController
               center={mapCenter}
-              zoom={muniFilter === "all" ? NV_ZOOM : 11}
+              zoom={barangayFilter !== "all" ? 13 : muniFilter === "all" ? NV_ZOOM : 11}
             />
             {/* Choropleth intensity overlay — municipality polygons coloured green→yellow→red */}
             {showHeatmap && muniPolygons.map(({ muni, paths, color }) => (
@@ -230,6 +273,27 @@ export function MapView({ reports, responders }: MapViewProps) {
                 clickable={false}
               />
             ))}
+
+            {/* Barangay boundary polygons for the selected town (N9). The chosen
+                barangay is highlighted; the rest are faint outlines for context.
+                Clicking a barangay selects it. */}
+            {showBarangays && muniFilter !== "all" && barangayShapes.flatMap((shape) => {
+              const selected = barangayFilter === shape.barangay;
+              const dimmed = barangayFilter !== "all" && !selected;
+              return shape.polygons.map((paths, i) => (
+                <Polygon
+                  key={`bgy-${shape.barangay}-${i}`}
+                  paths={paths}
+                  strokeColor={selected ? "#7C3AED" : "#475569"}
+                  strokeOpacity={dimmed ? 0.25 : selected ? 0.95 : 0.6}
+                  strokeWeight={selected ? 2.5 : 1}
+                  fillColor="#7C3AED"
+                  fillOpacity={selected ? 0.18 : 0}
+                  clickable
+                  onClick={() => setBarangayFilter(selected ? "all" : shape.barangay)}
+                />
+              ));
+            })}
 
             {/* Zone bubble markers — count per municipality */}
             {showZones && MUNICIPALITIES.map((muni) => {
