@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Map, FileText, BarChart3, Users, Megaphone,
   Radio, Menu, LogOut, ChevronDown, Shield, Building2, ClipboardList,
-  AlertCircle, X, BadgeCheck,
+  AlertCircle, X, BadgeCheck, Siren,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from "@/stores/authStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useReports } from "@/hooks/useReports";
+import { useSosAlerts } from "@/hooks/useSosAlerts";
 import { cn, getMunicipalityVars, getMunicipalityColor } from "@/lib/utils";
 import type { AuthUser } from "@/types";
 import { MUNICIPALITIES } from "@/data/municipalities";
@@ -38,6 +39,7 @@ const NAV_GROUPS = [
     label: "Operations",
     items: [
       { path: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true, minRank: 1 },
+      { path: "/dashboard/emergencies", label: "Emergencies", icon: Siren, minRank: 1 },
       { path: "/dashboard/reports", label: "Live Reports", icon: FileText, badge: true, minRank: 1 },
       { path: "/dashboard/map", label: "Incident Map", icon: Map, minRank: 1 },
       { path: "/dashboard/analytics", label: "Analytics", icon: BarChart3, minRank: 2 },
@@ -87,6 +89,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const municipality = viewAs === "municipal" ? viewMunicipality : null;
   const { reports } = useReports(municipality);
   const criticalOpen = reports.filter((r) => r.priority === "critical" && r.status !== "solved").length;
+  const { alerts: sosAlerts } = useSosAlerts();
+  const sosCount = sosAlerts.length;
 
   // Apply municipality colour theme to :root so portaled components (Sheet, dialogs) also inherit it
   useEffect(() => {
@@ -115,6 +119,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           viewMunicipality={viewMunicipality}
           canViewProvince={canViewProvince}
           criticalOpen={criticalOpen}
+          sosCount={sosCount}
           isActive={isActive}
           setViewAs={setViewAs}
           signOut={signOut}
@@ -134,6 +139,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             viewMunicipality={viewMunicipality}
             canViewProvince={canViewProvince}
             criticalOpen={criticalOpen}
+            sosCount={sosCount}
             isActive={isActive}
             setViewAs={setViewAs}
             signOut={signOut}
@@ -217,6 +223,7 @@ interface SidebarContentProps {
   viewMunicipality: string | null;
   canViewProvince: boolean;
   criticalOpen: number;
+  sosCount: number;
   isActive: (path: string, exact?: boolean) => boolean;
   setViewAs: (view: "provincial" | "municipal", municipality?: string) => void;
   signOut: () => void;
@@ -224,7 +231,7 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({
-  user, viewAs, viewMunicipality, canViewProvince, criticalOpen,
+  user, viewAs, viewMunicipality, canViewProvince, criticalOpen, sosCount,
   isActive, setViewAs, signOut, onNavClick,
 }: SidebarContentProps) {
   return (
@@ -339,7 +346,7 @@ function SidebarContent({
                           : "text-foreground/70 hover:bg-accent hover:text-foreground"
                       )}
                     >
-                      <item.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <item.icon className={cn("h-3.5 w-3.5 shrink-0", item.path === "/dashboard/emergencies" && sosCount > 0 && !active && "text-red-600")} aria-hidden="true" />
                       <span className="truncate">{item.label}</span>
                       {item.badge && criticalOpen > 0 && (
                         <span className={cn(
@@ -347,6 +354,14 @@ function SidebarContent({
                           active ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
                         )}>
                           {criticalOpen}
+                        </span>
+                      )}
+                      {item.path === "/dashboard/emergencies" && sosCount > 0 && (
+                        <span className={cn(
+                          "ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 animate-pulse",
+                          active ? "bg-white/20 text-white" : "bg-red-600 text-white"
+                        )}>
+                          {sosCount}
                         </span>
                       )}
                     </Link>

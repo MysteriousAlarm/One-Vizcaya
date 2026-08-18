@@ -18,6 +18,7 @@ import { Route as DashboardUsersRouteImport } from './routes/dashboard/users'
 import { Route as DashboardRespondersRouteImport } from './routes/dashboard/responders'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
 import { Route as DashboardMapRouteImport } from './routes/dashboard/map'
+import { Route as DashboardEmergenciesRouteImport } from './routes/dashboard/emergencies'
 import { Route as DashboardBroadcastsRouteImport } from './routes/dashboard/broadcasts'
 import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
 import { Route as DashboardAnnouncementsRouteImport } from './routes/dashboard/announcements'
@@ -68,6 +69,11 @@ const DashboardMapRoute = DashboardMapRouteImport.update({
   path: '/map',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardEmergenciesRoute = DashboardEmergenciesRouteImport.update({
+  id: '/emergencies',
+  path: '/emergencies',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardBroadcastsRoute = DashboardBroadcastsRouteImport.update({
   id: '/broadcasts',
   path: '/broadcasts',
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/broadcasts': typeof DashboardBroadcastsRoute
+  '/dashboard/emergencies': typeof DashboardEmergenciesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/responders': typeof DashboardRespondersRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/broadcasts': typeof DashboardBroadcastsRoute
+  '/dashboard/emergencies': typeof DashboardEmergenciesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/responders': typeof DashboardRespondersRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/broadcasts': typeof DashboardBroadcastsRoute
+  '/dashboard/emergencies': typeof DashboardEmergenciesRoute
   '/dashboard/map': typeof DashboardMapRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/responders': typeof DashboardRespondersRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/dashboard/announcements'
     | '/dashboard/audit'
     | '/dashboard/broadcasts'
+    | '/dashboard/emergencies'
     | '/dashboard/map'
     | '/dashboard/reports'
     | '/dashboard/responders'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/dashboard/announcements'
     | '/dashboard/audit'
     | '/dashboard/broadcasts'
+    | '/dashboard/emergencies'
     | '/dashboard/map'
     | '/dashboard/reports'
     | '/dashboard/responders'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/dashboard/announcements'
     | '/dashboard/audit'
     | '/dashboard/broadcasts'
+    | '/dashboard/emergencies'
     | '/dashboard/map'
     | '/dashboard/reports'
     | '/dashboard/responders'
@@ -252,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardMapRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/emergencies': {
+      id: '/dashboard/emergencies'
+      path: '/emergencies'
+      fullPath: '/dashboard/emergencies'
+      preLoaderRoute: typeof DashboardEmergenciesRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/broadcasts': {
       id: '/dashboard/broadcasts'
       path: '/broadcasts'
@@ -288,6 +307,7 @@ interface DashboardRouteRouteChildren {
   DashboardAnnouncementsRoute: typeof DashboardAnnouncementsRoute
   DashboardAuditRoute: typeof DashboardAuditRoute
   DashboardBroadcastsRoute: typeof DashboardBroadcastsRoute
+  DashboardEmergenciesRoute: typeof DashboardEmergenciesRoute
   DashboardMapRoute: typeof DashboardMapRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardRespondersRoute: typeof DashboardRespondersRoute
@@ -301,6 +321,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardAnnouncementsRoute: DashboardAnnouncementsRoute,
   DashboardAuditRoute: DashboardAuditRoute,
   DashboardBroadcastsRoute: DashboardBroadcastsRoute,
+  DashboardEmergenciesRoute: DashboardEmergenciesRoute,
   DashboardMapRoute: DashboardMapRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardRespondersRoute: DashboardRespondersRoute,

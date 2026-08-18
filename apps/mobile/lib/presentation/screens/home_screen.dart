@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_strings.dart';
 import '../state/municipality_state.dart';
@@ -13,6 +12,9 @@ import '../../features/announcements/presentation/widgets/announcements_carousel
 import '../../features/reports/presentation/widgets/community_feed.dart';
 import '../../core/widgets/weather_widget.dart';
 import '../../data/services/offline_queue_service.dart';
+import '../../data/services/sos_service.dart';
+import '../../core/utils/toast_utils.dart';
+import 'sos_active_screen.dart';
 import '../widgets/municipality_info_sheet.dart';
 import '../widgets/notification_bell.dart';
 
@@ -74,25 +76,46 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // One-command emergency: opens the dialer pre-filled with the PDRRMO line.
-  Future<void> _callPdrrmo() async {
-    final uri = Uri(scheme: 'tel', path: AppConstants.pdrrmoHotline);
-    try {
-      if (!await launchUrl(uri)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Could not open the dialer. Call ${AppConstants.pdrrmoHotline}.'),
-          ));
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Call ${AppConstants.pdrrmoHotline} for emergencies.'),
-        ));
-      }
+  // One-tap Emergency SOS: shares the user's LIVE location with responders (so
+  // they can be dispatched to the exact spot even if the call conveys none),
+  // then takes them to the active-emergency screen to also place the call.
+  Future<void> _triggerSos() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.sos_rounded, color: Color(0xFFC62828)),
+          SizedBox(width: 8),
+          Text('Send Emergency SOS?'),
+        ]),
+        content: const Text(
+            'This shares your LIVE location with emergency responders so they can '
+            'reach you fast, and lets you call the hotline. Use only for real '
+            'emergencies.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC62828)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Send SOS'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    ToastUtils.showInfo('Sending your location to responders…');
+    final id = await sosService.startEmergency();
+    if (!mounted) return;
+    if (id == null) {
+      ToastUtils.showError('Please sign in to send an SOS.');
+      return;
     }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SosActiveScreen(alertId: id)),
+    );
   }
 
   Future<void> _loadResidencyNudge() async {
@@ -492,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: _callPdrrmo,
+                onTap: _triggerSos,
                 child: Ink(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
