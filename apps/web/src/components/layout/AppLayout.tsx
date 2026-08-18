@@ -21,35 +21,47 @@ import type { AuthUser } from "@/types";
 import { MUNICIPALITIES } from "@/data/municipalities";
 import type { AdminRole } from "@/lib/firebase";
 
+// Minimum role rank required to see each nav item. A Barangay admin (rank 1)
+// gets reports + their residency queue only; Municipal (2) adds analytics,
+// responders & communications; Provincial/Super (3+) add users & audit.
+const ROLE_RANK: Record<string, number> = {
+  citizen: 0,
+  barangay_admin: 1,
+  municipal_admin: 2,
+  admin: 3,
+  provincial_admin: 3,
+  super_admin: 4,
+};
+
 const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
-      { path: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
-      { path: "/dashboard/reports", label: "Live Reports", icon: FileText, badge: true },
-      { path: "/dashboard/map", label: "Incident Map", icon: Map },
-      { path: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+      { path: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true, minRank: 1 },
+      { path: "/dashboard/reports", label: "Live Reports", icon: FileText, badge: true, minRank: 1 },
+      { path: "/dashboard/map", label: "Incident Map", icon: Map, minRank: 1 },
+      { path: "/dashboard/analytics", label: "Analytics", icon: BarChart3, minRank: 2 },
     ],
   },
   {
     label: "Directory",
     items: [
-      { path: "/dashboard/responders", label: "Responders", icon: Shield },
-      { path: "/dashboard/verifications", label: "Residency", icon: BadgeCheck },
-      { path: "/dashboard/users", label: "Admin Users", icon: Users },
+      { path: "/dashboard/responders", label: "Responders", icon: Shield, minRank: 2 },
+      { path: "/dashboard/verifications", label: "Residency", icon: BadgeCheck, minRank: 1 },
+      { path: "/dashboard/users", label: "Admin Users", icon: Users, minRank: 3 },
     ],
   },
   {
     label: "Communications",
     items: [
-      { path: "/dashboard/announcements", label: "Announcements", icon: Megaphone },
-      { path: "/dashboard/broadcasts", label: "Broadcast Alert", icon: Radio },
+      { path: "/dashboard/announcements", label: "Announcements", icon: Megaphone, minRank: 2 },
+      { path: "/dashboard/broadcasts", label: "Broadcast Alert", icon: Radio, minRank: 2 },
     ],
   },
   {
     label: "Administration",
     items: [
-      { path: "/dashboard/audit", label: "Audit Log", icon: ClipboardList },
+      { path: "/dashboard/audit", label: "Audit Log", icon: ClipboardList, minRank: 3 },
     ],
   },
 ];
@@ -298,9 +310,15 @@ function SidebarContent({
         </div>
       )}
 
-      {/* Nav groups */}
+      {/* Nav groups — filtered to the admin's tier (barangay admins see only
+          reports + their residency queue, etc.) */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4" aria-label="Main navigation">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => {
+          const rank = ROLE_RANK[user?.role ?? ""] ?? 0;
+          const items = group.items.filter((it) => rank >= it.minRank);
+          if (items.length === 0) return null;
+          return { ...group, items };
+        }).filter((g): g is NonNullable<typeof g> => g !== null).map((group) => (
           <div key={group.label}>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 mb-1">
               {group.label}

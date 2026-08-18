@@ -22,6 +22,7 @@ class RoleService {
     String targetName = '',
     String? targetPhone,
     String? municipality,
+    String? barangay,
   }) async {
     final current = FirebaseAuth.instance.currentUser;
     if (current == null) {
@@ -34,12 +35,26 @@ class RoleService {
       isSuper = token.claims?['role'] == 'super_admin';
     } catch (_) {}
 
+    // municipality is relevant for the two town-scoped tiers; barangay only for
+    // a barangay admin (cleared for every other role so no stale scope lingers).
+    final muniScoped =
+        role == UserRole.municipalAdmin || role == UserRole.barangayAdmin;
+    final scopedMuni = muniScoped ? municipality : null;
+    final scopedBrgy = role == UserRole.barangayAdmin ? (barangay ?? '') : null;
+
     try {
       if (isSuper) {
-        await _firestore.collection('users').doc(targetUid).set(
-          {'role': role.firestoreValue},
-          SetOptions(merge: true),
-        );
+        final data = <String, dynamic>{
+          'role': role.firestoreValue,
+          // Always write barangay (null unless barangay admin) so a re-scoped
+          // account never keeps an old grant.
+          'barangay': scopedBrgy,
+        };
+        if (scopedMuni != null) data['municipality'] = scopedMuni;
+        await _firestore
+            .collection('users')
+            .doc(targetUid)
+            .set(data, SetOptions(merge: true));
         ToastUtils.showSuccess('Role updated to ${role.displayName}');
       } else {
         await _firestore.collection('roleRequests').add({
@@ -47,8 +62,8 @@ class RoleService {
           'targetName': targetName,
           'targetPhone': targetPhone,
           'requestedRole': role.firestoreValue,
-          'municipality': municipality,
-          'barangay': null,
+          'municipality': scopedMuni,
+          'barangay': scopedBrgy,
           'nominatedBy': current.uid,
           'nominatedByName': current.displayName ?? '',
           'status': 'pending',

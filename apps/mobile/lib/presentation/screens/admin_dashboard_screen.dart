@@ -17,6 +17,7 @@ import '../../data/services/admin_service.dart';
 import '../../data/services/role_service.dart';
 import '../../features/auth/domain/entities/app_user.dart';
 import '../../core/utils/toast_utils.dart';
+import '../../core/utils/color_utils.dart';
 import '../../core/services/link_metadata_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_strings.dart';
@@ -40,12 +41,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   UserRole _currentUserRole = UserRole.citizen;
   bool _isLoadingRole = true;
+  // The signed-in admin's own scope (from their profile). For a Barangay admin
+  // this pins the dashboard to their municipality + barangay.
+  String _currentUserMunicipality = '';
+  String _currentUserBarangay = '';
 
   ReportPriority? _filterPriority;
   ReportStatus? _filterStatus;
+  // Reports tab barangay filter (municipal/provincial admins) — null = all.
+  String? _reportBarangayFilter;
   bool _isProvincialView = false;
   bool _sortNewestFirst = true;
   bool _isOffline = false;
+
+  bool get _isBarangayAdmin => _currentUserRole == UserRole.barangayAdmin;
+  bool get _canSeeAnnouncements => _currentUserRole != UserRole.barangayAdmin;
+  bool get _canSeeAnalytics => _currentUserRole != UserRole.barangayAdmin;
+  bool get _canSeeUsers =>
+      _currentUserRole == UserRole.provincialAdmin ||
+      _currentUserRole == UserRole.superAdmin;
 
   TabController? _tabController;
 
@@ -68,16 +82,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
     final role = await adminService.getUserRole(uid);
+    // Load the admin's own municipality + barangay so a Barangay admin can be
+    // scoped to their barangay (and to drive the role-based header).
+    String muni = '', brgy = '';
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      muni = (doc.data()?['municipality'] as String?) ?? '';
+      brgy = (doc.data()?['barangay'] as String?) ?? '';
+    } catch (_) {}
     if (!mounted) return;
 
+    // Tabs by role: Barangay = Reports only; Municipal = Reports/Announcements/
+    // Analytics; Provincial & Super = + Users.
+    final tabCount = role == UserRole.barangayAdmin
+        ? 1
+        : (role == UserRole.provincialAdmin || role == UserRole.superAdmin
+            ? 4
+            : 3);
     _tabController?.dispose();
-    _tabController = TabController(
-      length: (role == UserRole.provincialAdmin || role == UserRole.superAdmin) ? 4 : 3,
-      vsync: this,
-    );
+    _tabController = TabController(length: tabCount, vsync: this);
 
     setState(() {
       _currentUserRole = role;
+      _currentUserMunicipality = muni;
+      _currentUserBarangay = brgy;
       // Provincial & super admins default to provincial view
       // Super admin can toggle; provincial admin cannot
       _isProvincialView = role == UserRole.provincialAdmin || role == UserRole.superAdmin;
@@ -86,8 +117,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
   }
 
-  String get _activeMunicipalityName =>
-      oneVizcayaState.selectedMunicipality.value;
+  String get _activeMunicipalityName {
+    // SECURITY: Municipal & Barangay admins are PINNED to their own municipality.
+    // They must not be able to open another town's dashboard by changing the
+    // home-screen municipality picker (which drives the global selection). Only
+    // Provincial/Super admins may switch towns (via the N14 switcher).
+    if ((_currentUserRole == UserRole.municipalAdmin ||
+            _currentUserRole == UserRole.barangayAdmin) &&
+        _currentUserMunicipality.isNotEmpty) {
+      return _currentUserMunicipality;
+    }
+    return oneVizcayaState.selectedMunicipality.value;
+  }
 
   Color get _activeLguColor =>
       oneVizcayaState.activeTheme['appBarColor'] as Color;
@@ -96,27 +137,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // reads as the province's identity (not whichever municipality is selected).
   static const Color _provincialHeaderColor = Color(0xFF388A54);
 
-  // Color used for the top region (app bar, tabs, summary bar). The Provincial
-  // dashboard is fixed to the NV green; municipal dashboards keep their hue but
-  // are desaturated and pulled to a readable mid-lightness so the deep primaries
-  // aren't overpowering and white text stays legible.
-  Color get _headerColor =>
-      _isProvincialView ? _provincialHeaderColor : _washHeader(_activeLguColor);
-
-  static Color _washHeader(Color c) {
-    final hsl = HSLColor.fromColor(c);
-    return hsl
-        .withSaturation((hsl.saturation * 0.72).clamp(0.0, 1.0))
-        .withLightness((hsl.lightness * 0.5 + 0.26).clamp(0.30, 0.44))
-        .toColor();
+  // Role-based header colour — the top region (app bar, tabs, summary bar) is
+  // tinted by the admin's TIER so the level is obvious at a glance, matching the
+  // report-routing palette: Barangay green, Municipal blue, Provincial purple,
+  // Super Admin red. (Same hues as HandlingLevel.color.)
+  Color get _headerColor {
+    switch (_currentUserRole) {
+      case UserRole.superAdmin:
+        return const Color(0xFFC62828); // red
+      case UserRole.provincialAdmin:
+        return const Color(0xFF6A1B9A); // purple
+      case UserRole.municipalAdmin:
+        return const Color(0xFF1565C0); // blue
+      case UserRole.barangayAdmin:
+        return const Color(0xFF2E7D32); // green
+      default:
+        return _provincialHeaderColor;
+    }
   }
 
   Stream<List<ProblemReport>>? _reportsStream;
 
   void _rebuildReportsStream() {
-    _reportsStream = _isProvincialView
-        ? _reportRepository.getAllProvincialReports()
-        : _reportRepository.getAllMunicipalityReports(_activeMunicipalityName);
+    if (_isBarangayAdmin) {
+      // Barangay admin is confined to their own barangay's reports.
+      _reportsStream = _reportRepository.getBarangayReports(
+        _currentUserMunicipality.isNotEmpty
+            ? _currentUserMunicipality
+            : _activeMunicipalityName,
+        _currentUserBarangay,
+      );
+    } else if (_isProvincialView) {
+      _reportsStream = _reportRepository.getAllProvincialReports();
+    } else {
+      _reportsStream = _reportRepository.getAllMunicipalityReports(
+        _activeMunicipalityName,
+      );
+    }
   }
 
   void _showAddAnnouncementSheet() {
@@ -269,73 +326,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                             if (mounted) Navigator.pop(sheetCtx);
 
-                            // Reuse the existing role dialog from _RoleManagementTab
-                            // by opening it directly
-                            UserRole selected = currentRole;
+                            // Role assignment with municipality/barangay scope.
                             await showDialog(
                               context: context,
-                              builder: (ctx) => StatefulBuilder(
-                                builder: (ctx, setDialogState) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16)),
-                                  title: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Assign Role',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold)),
-                                      Text(name,
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.normal,
-                                              color: Colors.grey.shade600)),
-                                      Text(phone,
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade400)),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: UserRole.values.map((role) {
-                                      return RadioListTile<UserRole>(
-                                        dense: true,
-                                        activeColor: _activeLguColor,
-                                        title: Text(role.displayName,
-                                            style: const TextStyle(
-                                                fontSize: 14)),
-                                        subtitle: _roleDescription(role),
-                                        value: role,
-                                        groupValue: selected,
-                                        onChanged: (v) {
-                                          if (v != null) {
-                                            setDialogState(
-                                                () => selected = v);
-                                          }
-                                        },
-                                      );
-                                    }).toList(),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx),
-                                        child: const Text('Cancel')),
-                                    ElevatedButton(
-                                      onPressed: () async {
-                                        Navigator.pop(ctx);
-                                        await roleService.assignRole(
-                                            uid, selected,
-                                            targetName: name);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: _activeLguColor,
-                                          foregroundColor: Colors.white),
-                                      child: const Text('Save'),
-                                    ),
-                                  ],
-                                ),
+                              builder: (ctx) => _RoleAssignDialog(
+                                uid: uid,
+                                name: name,
+                                phone: phone,
+                                currentRole: currentRole,
+                                accent: _activeLguColor,
+                                subtitleBuilder: _roleDescription,
                               ),
                             );
                           } catch (e) {
@@ -466,6 +466,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_filterStatus != null) {
       filtered = filtered.where((r) => r.status == _filterStatus).toList();
     }
+    // Barangay drill-down (municipal/provincial admins) for ease of access.
+    if (_reportBarangayFilter != null && _reportBarangayFilter!.isNotEmpty) {
+      filtered = filtered
+          .where((r) => (r.barangay ?? '') == _reportBarangayFilter)
+          .toList();
+    }
 
     if (_sortNewestFirst) {
       filtered.sort((a, b) {
@@ -501,13 +507,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     final lguColor = _activeLguColor;
     final headerColor = _headerColor;
+    // Text/icons on the role-coloured header stay legible on any tint.
+    final onHeader = ColorUtils.readableTextOn(headerColor);
     final muniName = _activeMunicipalityName;
     final tabController = _tabController!;
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: headerColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onHeader,
         // N15: keep the title from being harshly clipped — scale it down to fit
         // instead of cutting it off. The scope (which town / province-wide) is
         // also shown by the switcher action to the right.
@@ -517,7 +525,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              _isProvincialView ? 'Provincial Dashboard' : '$muniName Admin',
+              _isBarangayAdmin
+                  ? 'Brgy. ${_currentUserBarangay.isNotEmpty ? _currentUserBarangay : muniName} Admin'
+                  : _isProvincialView
+                      ? 'Provincial Dashboard'
+                      : '$muniName Admin',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               maxLines: 1,
             ),
@@ -541,6 +553,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 }
                 _filterPriority = null;
                 _filterStatus = null;
+                _reportBarangayFilter = null;
                 _rebuildReportsStream();
               }),
               itemBuilder: (context) => [
@@ -577,15 +590,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
         bottom: TabBar(
           controller: tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
+          indicatorColor: onHeader,
+          labelColor: onHeader,
+          unselectedLabelColor: onHeader.withValues(alpha: 0.6),
           tabs: [
             const Tab(icon: Icon(Icons.report_problem), text: 'Reports'),
-            const Tab(icon: Icon(Icons.campaign), text: 'Announcements'),
-            const Tab(icon: Icon(Icons.bar_chart), text: 'Analytics'),
-            if (_currentUserRole == UserRole.provincialAdmin ||
-                _currentUserRole == UserRole.superAdmin)
+            if (_canSeeAnnouncements)
+              const Tab(icon: Icon(Icons.campaign), text: 'Announcements'),
+            if (_canSeeAnalytics)
+              const Tab(icon: Icon(Icons.bar_chart), text: 'Analytics'),
+            if (_canSeeUsers)
               const Tab(icon: Icon(Icons.manage_accounts), text: 'Users'),
           ],
         ),
@@ -739,31 +753,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ],
           ),
 
-          // ── Tab 2: Announcements ──
+          // ── Tab 2: Announcements (Municipal+ only) ──
           // isProvincialAdmin mirrors _isProvincialView so toggling view
           // correctly switches between province-wide and municipal scope.
-          _AnnouncementsTab(
-            lguColor: lguColor,
-            municipality: muniName,
-            isProvincialAdmin: _isProvincialView,
-          ),
+          if (_canSeeAnnouncements)
+            _AnnouncementsTab(
+              lguColor: lguColor,
+              municipality: muniName,
+              isProvincialAdmin: _isProvincialView,
+            ),
 
-          // ── Tab 3: Analytics ──
-          StreamBuilder<List<ProblemReport>>(
-            stream: _reportsStream ?? const Stream.empty(),
-            builder: (context, snapshot) {
-              final reports = snapshot.data ?? [];
-              return _AnalyticsTab(
-                reports: reports,
-                lguColor: lguColor,
-              );
-            },
-          ),
+          // ── Tab 3: Analytics (Municipal+ only) ──
+          if (_canSeeAnalytics)
+            StreamBuilder<List<ProblemReport>>(
+              stream: _reportsStream ?? const Stream.empty(),
+              builder: (context, snapshot) {
+                final reports = snapshot.data ?? [];
+                return _AnalyticsTab(
+                  reports: reports,
+                  lguColor: lguColor,
+                );
+              },
+            ),
 
           // ── Tab 4: Users (provincial + super admin only) ──
-          if (_currentUserRole == UserRole.provincialAdmin ||
-              _currentUserRole == UserRole.superAdmin)
-            _RoleManagementTab(lguColor: lguColor),
+          if (_canSeeUsers) _RoleManagementTab(lguColor: lguColor),
         ],
       ),
     );
@@ -1023,6 +1037,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
           ),
+          // Barangay drill-down — municipal/provincial admins viewing one town.
+          // A Barangay admin is already scoped, so it's hidden for them.
+          if (!_isBarangayAdmin && !_isProvincialView)
+            Builder(builder: (context) {
+              final brgys = AppConstants
+                      .municipalityBarangays[_activeMunicipalityName] ??
+                  const <String>[];
+              if (brgys.isEmpty) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                tooltip: 'Filter by barangay',
+                padding: EdgeInsets.zero,
+                onSelected: (v) => setState(() =>
+                    _reportBarangayFilter = v == '__ALL__' ? null : v),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: '__ALL__', child: Text('All Barangays')),
+                  const PopupMenuDivider(),
+                  ...brgys.map((b) => PopupMenuItem(value: b, child: Text(b))),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.holiday_village_outlined,
+                        size: 14, color: lguColor),
+                    const SizedBox(width: 3),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 92),
+                      child: Text(
+                        _reportBarangayFilter ?? 'All Brgy.',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: lguColor,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, size: 16, color: lguColor),
+                  ],
+                ),
+              );
+            }),
           const Spacer(),
           if (_filterPriority != null || _filterStatus != null)
             TextButton(
@@ -4445,58 +4500,14 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
       String uid,
       String name,
       UserRole currentRole) {
-    UserRole selected = currentRole;
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Assign Role',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(name,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.normal,
-                      color: Colors.grey.shade600)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: UserRole.values.map((role) {
-              return RadioListTile<UserRole>(
-                dense: true,
-                activeColor: widget.lguColor,
-                title: Text(role.displayName,
-                    style: const TextStyle(fontSize: 14)),
-                subtitle: _roleDescription(role),
-                value: role,
-                groupValue: selected,
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => selected = v);
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await roleService.assignRole(uid, selected, targetName: name);
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.lguColor,
-                  foregroundColor: Colors.white),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+      builder: (ctx) => _RoleAssignDialog(
+        uid: uid,
+        name: name,
+        currentRole: currentRole,
+        accent: widget.lguColor,
+        subtitleBuilder: _roleDescription,
       ),
     );
   }
@@ -4732,6 +4743,174 @@ class _RoleManagementTabState extends State<_RoleManagementTab> {
               );
             },
           ),
+        ),
+      ],
+    );
+  }
+}
+
+// Role assignment dialog with tier scope. Assigning a Municipal admin requires
+// a municipality; a Barangay admin requires a municipality AND a barangay, so
+// the account is actually scoped (an unscoped Barangay admin can see nothing).
+class _RoleAssignDialog extends StatefulWidget {
+  final String uid;
+  final String name;
+  final String phone;
+  final UserRole currentRole;
+  final Color accent;
+  final Widget? Function(UserRole) subtitleBuilder;
+
+  const _RoleAssignDialog({
+    required this.uid,
+    required this.name,
+    required this.currentRole,
+    required this.accent,
+    required this.subtitleBuilder,
+    this.phone = '',
+  });
+
+  @override
+  State<_RoleAssignDialog> createState() => _RoleAssignDialogState();
+}
+
+class _RoleAssignDialogState extends State<_RoleAssignDialog> {
+  late UserRole _selected = widget.currentRole;
+  String? _muni;
+  String? _brgy;
+  bool _saving = false;
+
+  bool get _needsMuni =>
+      _selected == UserRole.municipalAdmin ||
+      _selected == UserRole.barangayAdmin;
+  bool get _needsBrgy => _selected == UserRole.barangayAdmin;
+
+  Future<void> _save() async {
+    if (_needsMuni && (_muni == null || _muni!.isEmpty)) {
+      ToastUtils.showError('Pick a municipality for this role.');
+      return;
+    }
+    if (_needsBrgy && (_brgy == null || _brgy!.isEmpty)) {
+      ToastUtils.showError('Pick a barangay for a Barangay admin.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await roleService.assignRole(
+        widget.uid,
+        _selected,
+        targetName: widget.name,
+        targetPhone: widget.phone.isEmpty ? null : widget.phone,
+        municipality: _needsMuni ? _muni : null,
+        barangay: _needsBrgy ? _brgy : null,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brgys = _muni == null
+        ? const <String>[]
+        : (AppConstants.municipalityBarangays[_muni] ?? const <String>[]);
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Assign Role',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(widget.name,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.grey.shade600)),
+          if (widget.phone.isNotEmpty)
+            Text(widget.phone,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ...UserRole.values.map((role) => RadioListTile<UserRole>(
+                    dense: true,
+                    activeColor: widget.accent,
+                    title: Text(role.displayName,
+                        style: const TextStyle(fontSize: 14)),
+                    subtitle: widget.subtitleBuilder(role),
+                    value: role,
+                    groupValue: _selected,
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _selected = v;
+                          if (!_needsBrgy) _brgy = null;
+                        });
+                      }
+                    },
+                  )),
+              if (_needsMuni)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _muni,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Municipality',
+                        border: OutlineInputBorder()),
+                    items: AppConstants.municipalities
+                        .map((m) =>
+                            DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      _muni = v;
+                      _brgy = null; // town change invalidates barangay
+                    }),
+                  ),
+                ),
+              if (_needsBrgy)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _brgy,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                        labelText:
+                            _muni == null ? 'Pick municipality first' : 'Barangay',
+                        border: const OutlineInputBorder()),
+                    items: brgys
+                        .map((b) =>
+                            DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: _muni == null
+                        ? null
+                        : (v) => setState(() => _brgy = v),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: widget.accent, foregroundColor: Colors.white),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Text('Save'),
         ),
       ],
     );
