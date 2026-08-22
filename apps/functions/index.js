@@ -220,6 +220,23 @@ async function applyRole(uid, role, municipality, barangay) {
   await admin.firestore().collection("users").doc(uid).set(profile, { merge: true });
 }
 
+// Resolve the caller's effective role the same way the Firestore security rules'
+// role() helper does: trust the Auth custom claim first (fast, no read), but fall
+// back to the users/{uid} profile document when the claim is missing. Roles can
+// be set by a direct Firestore write (which never touches the custom claim), so a
+// legitimate super_admin may have role only in their profile until their next
+// token refresh — without this fallback those accounts are locked out of every
+// admin-only callable, including the very ones (setAdminRole/migrateLegacyAdmins)
+// that would repair their claim. Returns null when neither source has a role.
+async function resolveCallerRole(request) {
+  const claimRole = request.auth?.token?.role;
+  if (claimRole) return claimRole;
+  const uid = request.auth?.uid;
+  if (!uid) return null;
+  const doc = await admin.firestore().collection("users").doc(uid).get();
+  return doc.exists ? doc.data()?.role ?? null : null;
+}
+
 // ── Set Admin Role (direct) ──────────────────────────────────────────────────
 // Direct role assignment is now a SUPER-ADMIN-only power. Everyone below the
 // super admin must go through the nominate → approve workflow (roleRequests +
@@ -229,7 +246,7 @@ exports.setAdminRole = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Must be authenticated.");
   }
-  if (request.auth.token.role !== "super_admin") {
+  if ((await resolveCallerRole(request)) !== "super_admin") {
     throw new HttpsError(
       "permission-denied",
       "Only a super admin may assign roles directly. Use nominate → approve."
@@ -301,7 +318,7 @@ exports.onRoleRequestDecision = onDocumentUpdated(
 // authority the rules always gave it) in both the Auth claim and the profile.
 // Super-admin only; safe to re-run (idempotent).
 exports.migrateLegacyAdmins = onCall(async (request) => {
-  if (!request.auth || request.auth.token.role !== "super_admin") {
+  if (!request.auth || (await resolveCallerRole(request)) !== "super_admin") {
     throw new HttpsError("permission-denied", "Super admin only.");
   }
   const db = admin.firestore();
@@ -1406,7 +1423,7 @@ exports.deleteOldArchivedReports = onSchedule(
 // Municipal BFP station before use. Call this once from Firebase Console.
 exports.seedResponders = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be authenticated.");
-  const callerRole = request.auth.token.role;
+  const callerRole = await resolveCallerRole(request);
   if (!["admin", "provincial_admin", "super_admin"].includes(callerRole)) {
     throw new HttpsError("permission-denied", "Only admins can seed responders.");
   }
