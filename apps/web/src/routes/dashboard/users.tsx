@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsersCard } from "@/components/users/UsersCard";
 import { RoleRequestsCard } from "@/components/users/RoleRequestsCard";
+import { MaintenanceCard } from "@/components/users/MaintenanceCard";
 import { useUsers } from "@/hooks/useUsers";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -47,6 +48,17 @@ function UsersPage() {
           <UsersCard users={users} loading={loading} />
         </CardContent>
       </Card>
+
+      {user?.role === "super_admin" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">System Maintenance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MaintenanceCard />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
