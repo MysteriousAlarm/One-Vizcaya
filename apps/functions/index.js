@@ -1407,7 +1407,7 @@ exports.deleteOldArchivedReports = onSchedule(
 exports.seedResponders = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be authenticated.");
   const callerRole = request.auth.token.role;
-  if (!["admin", "provincial_admin"].includes(callerRole)) {
+  if (!["admin", "provincial_admin", "super_admin"].includes(callerRole)) {
     throw new HttpsError("permission-denied", "Only admins can seed responders.");
   }
 
