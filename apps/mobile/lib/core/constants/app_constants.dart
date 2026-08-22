@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   /// Update this whenever you bump the version in pubspec.yaml.
-  static const String appVersion = '1.3.12';
-  static const int buildNumber = 14;
+  static const String appVersion = '1.4.0';
+  static const int buildNumber = 26;
   static const String appVersionDisplay = '$appVersion (Build $buildNumber)';
 
   /// Web-based admin portal (Firebase Hosting). Admins can jump to it from the
