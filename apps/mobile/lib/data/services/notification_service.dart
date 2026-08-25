@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/toast_utils.dart';
@@ -70,15 +69,39 @@ class NotificationService {
       }
     });
 
-    // Show FCM foreground messages as toasts — EXCEPT broadcasts, which the
-    // in-app Firestore listener presents professionally (urgent takeover /
-    // heads-up banner). Skipping them here avoids a duplicate green toast.
+    // Present FCM foreground messages as a professional top heads-up banner
+    // (replaces the easy-to-miss green bottom toast). Broadcasts are skipped
+    // here — the in-app Firestore listener presents them (urgent takeover /
+    // heads-up banner) — which also avoids a duplicate.
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.data['type'] == 'broadcast') return;
       final notification = message.notification;
-      if (notification != null) {
-        final title = notification.title ?? 'Update';
-        final body = notification.body ?? '';
+      if (notification == null) return;
+      final title = notification.title ?? 'Update';
+      final body = notification.body ?? '';
+      final reportId = message.data['reportId'] as String?;
+      final navKey = navigatorKey;
+      if (navKey != null) {
+        // notifyOnStatusChange sends the status under `newStatus`.
+        final statusData = message.data['status'] as String? ??
+            message.data['newStatus'] as String? ??
+            '';
+        final style = _statusStyle(statusData);
+        InAppNotifier.show(
+          navigatorKey: navKey,
+          label: style.label,
+          title: title,
+          body: body,
+          icon: style.icon,
+          accent: style.accent,
+          onTap: (reportId != null && reportId.isNotEmpty)
+              ? () => navKey.currentState?.pushNamed(
+                    '/status',
+                    arguments: {'reportId': reportId},
+                  )
+              : null,
+        );
+      } else {
         ToastUtils.showSuccess('$title: $body');
       }
     });
@@ -183,14 +206,41 @@ class NotificationService {
         .listen((snap) async {
       for (final doc in snap.docs) {
         final data = doc.data();
+        // Broadcasts are presented by _listenForBroadcasts (urgent takeover /
+        // heads-up banner) and also stored here for the inbox. Skip them so they
+        // aren't presented a second time; leave them unread for the inbox badge.
+        if (data['type'] == 'broadcast') continue;
         final title = data['title'] as String? ?? 'Update';
         final body = data['body'] as String? ?? '';
-        ToastUtils.showSuccess('$title: $body');
+        final status = data['status'] as String? ?? '';
+        final reportId = data['reportId'] as String?;
+        final ts = (data['timestamp'] as Timestamp?)?.toDate();
+
+        final navKey = navigatorKey;
+        if (navKey != null) {
+          final style = _statusStyle(status);
+          InAppNotifier.show(
+            navigatorKey: navKey,
+            label: style.label,
+            title: title,
+            body: body,
+            icon: style.icon,
+            accent: style.accent,
+            timestamp: ts,
+            onTap: (reportId != null && reportId.isNotEmpty)
+                ? () => navKey.currentState?.pushNamed(
+                      '/status',
+                      arguments: {'reportId': reportId},
+                    )
+                : null,
+          );
+        } else {
+          ToastUtils.showSuccess('$title: $body');
+        }
         // Mark as read
         await doc.reference.update({'read': true});
 
         // Feature 5: prompt in-app review when a report is solved
-        final status = data['status'] as String? ?? '';
         if (status == 'solved') {
           _maybeShowRatingPrompt();
         }
@@ -266,6 +316,38 @@ class NotificationService {
       // FIX 1: Log errors instead of swallowing them silently
       debugPrint('NotificationService._listenForBroadcasts error: $e');
     });
+  }
+
+  // Maps a report/notification status to a label, icon, and accent colour for
+  // the in-app heads-up banner.
+  ({String label, IconData icon, Color accent}) _statusStyle(String status) {
+    switch (status) {
+      case 'solved':
+      case 'success':
+        return (
+          label: 'REPORT RESOLVED',
+          icon: Icons.check_circle_rounded,
+          accent: const Color(0xFF2E7D32),
+        );
+      case 'ongoing':
+        return (
+          label: 'REPORT UPDATE',
+          icon: Icons.construction_rounded,
+          accent: const Color(0xFFE65100),
+        );
+      case 'urgent':
+        return (
+          label: 'URGENT',
+          icon: Icons.warning_amber_rounded,
+          accent: const Color(0xFF8B0000),
+        );
+      default:
+        return (
+          label: 'UPDATE',
+          icon: Icons.notifications_active_rounded,
+          accent: const Color(0xFF1565C0),
+        );
+    }
   }
 
   Future<void> _maybeShowRatingPrompt() async {

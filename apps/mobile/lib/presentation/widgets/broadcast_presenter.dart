@@ -1,11 +1,57 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+/// A professional top heads-up banner used for ALL in-app notifications
+/// (report updates, announcements, normal broadcasts). It slides down from the
+/// top, can be swiped up or tapped to dismiss, optionally opens a target screen
+/// on tap, and auto-dismisses after a few seconds. Replaces the old plain green
+/// bottom toast, which PDRRMO staff found easy to miss.
+class InAppNotifier {
+  const InAppNotifier._();
+
+  static void show({
+    required GlobalKey<NavigatorState> navigatorKey,
+    required String label,
+    required String title,
+    required String body,
+    IconData icon = Icons.notifications_active_rounded,
+    Color accent = const Color(0xFF1B5E20),
+    DateTime? timestamp,
+    VoidCallback? onTap,
+  }) {
+    final navState = navigatorKey.currentState;
+    if (navState == null) return;
+    final overlay = navState.overlay;
+    if (overlay == null) return;
+
+    OverlayEntry? entry;
+    var removed = false;
+    void remove() {
+      if (removed) return;
+      removed = true;
+      entry?.remove();
+    }
+
+    entry = OverlayEntry(
+      builder: (_) => _HeadsUpBanner(
+        label: label,
+        title: title,
+        body: body,
+        icon: icon,
+        accent: accent,
+        timestamp: timestamp,
+        onTap: onTap,
+        onDismiss: remove,
+      ),
+    );
+    overlay.insert(entry);
+  }
+}
+
 /// Presents incoming broadcasts to citizens with a presentation that matches the
 /// broadcast's severity:
 ///   • urgent  → a full-screen takeover alert that must be acknowledged
-///   • normal  → a professional heads-up banner that slides in from the top and
-///               auto-dismisses (replaces the old plain green toast)
+///   • normal  → the professional heads-up banner (via [InAppNotifier])
 ///
 /// Driven from NotificationService's Firestore broadcast listener, which has the
 /// full document (including the `urgent` flag) while the app is in the foreground.
@@ -19,10 +65,9 @@ class BroadcastPresenter {
     required String body,
     DateTime? timestamp,
   }) {
-    final navState = navigatorKey.currentState;
-    if (navState == null) return;
-
     if (urgent) {
+      final navState = navigatorKey.currentState;
+      if (navState == null) return;
       navState.push(
         MaterialPageRoute<void>(
           fullscreenDialog: true,
@@ -36,25 +81,15 @@ class BroadcastPresenter {
       return;
     }
 
-    final overlay = navState.overlay;
-    if (overlay == null) return;
-    OverlayEntry? entry;
-    var removed = false;
-    void remove() {
-      if (removed) return;
-      removed = true;
-      entry?.remove();
-    }
-
-    entry = OverlayEntry(
-      builder: (_) => _HeadsUpBanner(
-        title: title,
-        body: body,
-        timestamp: timestamp,
-        onDismiss: remove,
-      ),
+    InAppNotifier.show(
+      navigatorKey: navigatorKey,
+      label: 'ANNOUNCEMENT',
+      title: title,
+      body: body,
+      icon: Icons.campaign_rounded,
+      accent: const Color(0xFF1B5E20),
+      timestamp: timestamp,
     );
-    overlay.insert(entry);
   }
 }
 
@@ -230,18 +265,26 @@ class UrgentBroadcastScreen extends StatelessWidget {
 }
 
 /// Non-urgent heads-up banner: a clean card that slides down from the top,
-/// can be swiped up or tapped to dismiss, and auto-dismisses after a few seconds.
+/// can be swiped up or tapped, and auto-dismisses after a few seconds.
 class _HeadsUpBanner extends StatefulWidget {
   const _HeadsUpBanner({
+    required this.label,
     required this.title,
     required this.body,
+    required this.icon,
+    required this.accent,
     required this.onDismiss,
     this.timestamp,
+    this.onTap,
   });
 
+  final String label;
   final String title;
   final String body;
+  final IconData icon;
+  final Color accent;
   final DateTime? timestamp;
+  final VoidCallback? onTap;
   final VoidCallback onDismiss;
 
   @override
@@ -280,6 +323,15 @@ class _HeadsUpBannerState extends State<_HeadsUpBanner>
     widget.onDismiss();
   }
 
+  void _handleTap() {
+    final onTap = widget.onTap;
+    _timer?.cancel();
+    // Dismiss immediately then run the action (e.g. navigate to the report).
+    _dismissed = true;
+    widget.onDismiss();
+    if (onTap != null) onTap();
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -289,7 +341,6 @@ class _HeadsUpBannerState extends State<_HeadsUpBanner>
 
   @override
   Widget build(BuildContext context) {
-    const green = Color(0xFF1B5E20);
     return Positioned(
       top: 0,
       left: 0,
@@ -301,7 +352,7 @@ class _HeadsUpBannerState extends State<_HeadsUpBanner>
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Dismissible(
-              key: const ValueKey('broadcast-heads-up'),
+              key: const ValueKey('in-app-heads-up'),
               direction: DismissDirection.up,
               onDismissed: (_) {
                 _dismissed = true;
@@ -312,76 +363,79 @@ class _HeadsUpBannerState extends State<_HeadsUpBanner>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(14),
                 color: Theme.of(context).cardColor,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.all(Radius.circular(14)),
-                    border: Border(
-                      left: BorderSide(color: green, width: 4),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.campaign_rounded,
-                            color: green, size: 20),
+                child: InkWell(
+                  onTap: widget.onTap != null ? _handleTap : null,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border(
+                        left: BorderSide(color: widget.accent, width: 4),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'ANNOUNCEMENT',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 1.2,
-                                      color: green,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: widget.accent.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(widget.icon, color: widget.accent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      widget.label,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.2,
+                                        color: widget.accent,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                GestureDetector(
-                                  onTap: _dismiss,
-                                  child: Icon(Icons.close,
-                                      size: 18, color: Colors.grey[500]),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              widget.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                                  GestureDetector(
+                                    onTap: _dismiss,
+                                    child: Icon(Icons.close,
+                                        size: 18, color: Colors.grey[500]),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.body,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                height: 1.3,
-                                color: Colors.grey[700],
+                              const SizedBox(height: 3),
+                              Text(
+                                widget.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.body,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.3,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
