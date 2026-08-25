@@ -125,6 +125,14 @@ enum ReportCategory {
     'General Inquiries & Others',
     'e.g. Community feedback, general LGU inquiry, request for information, miscellaneous concern not listed above.',
     ReportPriority.low,
+  ),
+  // Catch-all for a concern that fits none of the categories above. There is no
+  // example text on purpose — the (required) description forces the citizen to
+  // specify exactly what they are reporting so operators know what they handle.
+  others(
+    'Others (Not Listed)',
+    'Your concern is not in the list above. Please describe it in detail so the LGU can identify and route it correctly.',
+    ReportPriority.low,
   );
 
   final String displayName;
