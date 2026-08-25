@@ -1312,7 +1312,7 @@ class _BarangayDropdown extends StatelessWidget {
 // Step 2: pick a specific category within that tier
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _CategoryTreeSelector extends StatelessWidget {
+class _CategoryTreeSelector extends StatefulWidget {
   final Color primaryColor;
   final ReportPriority? selectedPriority;
   final ReportCategory? selectedCategory;
@@ -1330,6 +1330,14 @@ class _CategoryTreeSelector extends StatelessWidget {
     required this.onCategorySelected,
     required this.onReset,
   });
+
+  @override
+  State<_CategoryTreeSelector> createState() => _CategoryTreeSelectorState();
+}
+
+class _CategoryTreeSelectorState extends State<_CategoryTreeSelector> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
 
   static const _priorityOrder = [
     ReportPriority.critical,
@@ -1349,11 +1357,20 @@ class _CategoryTreeSelector extends StatelessWidget {
       ReportCategory.values.where((c) => c.basePriority == p).toList();
 
   @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // ── State C: both selected → show breadcrumb summary ──────────────────
-    if (selectedCategory != null) {
+    if (widget.selectedCategory != null) {
       return _buildSummary(context);
     }
+
+    final query = _query.trim().toLowerCase();
+    final searching = query.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1363,17 +1380,17 @@ class _CategoryTreeSelector extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(
             children: [
-              Icon(Icons.category, size: 16, color: primaryColor),
+              Icon(Icons.category, size: 16, color: widget.primaryColor),
               const SizedBox(width: 6),
               Text(
                 'Select Problem Category',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: primaryColor,
+                  color: widget.primaryColor,
                 ),
               ),
-              if (hasError) ...[
+              if (widget.hasError) ...[
                 const SizedBox(width: 8),
                 const Text(
                   '* Required',
@@ -1384,24 +1401,129 @@ class _CategoryTreeSelector extends StatelessWidget {
           ),
         ),
 
-        // ── State A: no priority chosen yet → show 2×2 priority tiles ─────
-        if (selectedPriority == null) _buildPriorityGrid(),
+        // ── Search: type what you're reporting (e.g. "traffic") ───────────
+        _buildSearchField(),
+        const SizedBox(height: 10),
 
-        // ── State B: priority chosen → show category list for that tier ───
-        if (selectedPriority != null) ...[
-          _buildSelectedPriorityHeader(),
-          const SizedBox(height: 8),
-          _buildCategoryList(),
+        if (searching)
+          _buildSearchResults(query)
+        else ...[
+          // ── State A: no priority chosen yet → show 2×2 priority tiles ─────
+          if (widget.selectedPriority == null) _buildPriorityGrid(),
+
+          // ── State B: priority chosen → show category list for that tier ───
+          if (widget.selectedPriority != null) ...[
+            _buildSelectedPriorityHeader(),
+            const SizedBox(height: 8),
+            _buildCategoryList(),
+          ],
         ],
 
-        if (hasError)
+        if (widget.hasError)
           Padding(
             padding: const EdgeInsets.only(top: 6, left: 4),
             child: Text(
-              'Please complete both steps to continue.',
+              'Please pick a category (search or browse) to continue.',
               style: TextStyle(fontSize: 11, color: Colors.red.shade700),
             ),
           ),
+      ],
+    );
+  }
+
+  // ── Search field: filters all categories by name or example text ──────────
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchCtrl,
+      onChanged: (v) => setState(() => _query = v),
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Search e.g. "traffic", "flood", "streetlight"…',
+        hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+        prefixIcon: Icon(Icons.search, size: 20, color: widget.primaryColor),
+        suffixIcon: _query.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Clear search',
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() => _query = '');
+                },
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: widget.primaryColor, width: 2),
+        ),
+      ),
+    );
+  }
+
+  // ── Flat, cross-tier results for the current query ────────────────────────
+  Widget _buildSearchResults(String query) {
+    final matches = ReportCategory.values
+        .where((c) =>
+            c.displayName.toLowerCase().contains(query) ||
+            c.description.toLowerCase().contains(query))
+        .toList();
+
+    if (matches.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Text(
+              'No categories match "$query".',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Report it under “Others” and describe it — the LGU will route it.",
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => widget.onCategorySelected(ReportCategory.others),
+              icon: const Icon(Icons.help_outline, size: 18),
+              label: const Text('Report under "Others"'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: widget.primaryColor,
+                side: BorderSide(color: widget.primaryColor.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6, left: 2),
+          child: Text(
+            '${matches.length} match${matches.length == 1 ? '' : 'es'}',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ),
+        ...matches.map(
+          (c) => _CategoryCard(
+            category: c,
+            onTap: () => widget.onCategorySelected(c),
+          ),
+        ),
       ],
     );
   }
@@ -1426,7 +1548,7 @@ class _CategoryTreeSelector extends StatelessWidget {
               priority: p,
               subtitle: _prioritySubtitles[p]!,
               categoryCount: count,
-              onTap: () => onPrioritySelected(p),
+              onTap: () => widget.onPrioritySelected(p),
             );
           }).toList(),
         );
@@ -1436,9 +1558,9 @@ class _CategoryTreeSelector extends StatelessWidget {
 
   // ── Selected priority header with back button ─────────────────────────────
   Widget _buildSelectedPriorityHeader() {
-    final p = selectedPriority!;
+    final p = widget.selectedPriority!;
     return GestureDetector(
-      onTap: onReset,
+      onTap: widget.onReset,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1476,7 +1598,7 @@ class _CategoryTreeSelector extends StatelessWidget {
 
   // ── Category cards for the selected priority tier ─────────────────────────
   Widget _buildCategoryList() {
-    final categories = _categoriesFor(selectedPriority!);
+    final categories = _categoriesFor(widget.selectedPriority!);
     return AnimatedSize(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
@@ -1485,7 +1607,7 @@ class _CategoryTreeSelector extends StatelessWidget {
             .map(
               (c) => _CategoryCard(
                 category: c,
-                onTap: () => onCategorySelected(c),
+                onTap: () => widget.onCategorySelected(c),
               ),
             )
             .toList(),
@@ -1495,7 +1617,7 @@ class _CategoryTreeSelector extends StatelessWidget {
 
   // ── Summary breadcrumb after full selection ───────────────────────────────
   Widget _buildSummary(BuildContext context) {
-    final p = selectedCategory!.basePriority;
+    final p = widget.selectedCategory!.basePriority;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return Column(
@@ -1531,7 +1653,7 @@ class _CategoryTreeSelector extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  selectedCategory!.displayName,
+                  widget.selectedCategory!.displayName,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1542,7 +1664,7 @@ class _CategoryTreeSelector extends StatelessWidget {
                 ),
               ),
               GestureDetector(
-                onTap: onReset,
+                onTap: widget.onReset,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -1573,7 +1695,7 @@ class _CategoryTreeSelector extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
           child: Text(
-            selectedCategory!.description,
+            widget.selectedCategory!.description,
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey.shade600,
