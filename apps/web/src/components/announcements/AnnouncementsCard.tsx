@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { format } from "date-fns";
-import { Plus, Trash2, Megaphone, AlertTriangle, Loader2, Link2, Download } from "lucide-react";
+import { Plus, Trash2, Megaphone, AlertTriangle, Loader2, Wand2, Lock, Building2 } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
@@ -25,65 +24,87 @@ interface AnnouncementsCardProps {
   loading: boolean;
 }
 
+const PROVINCIAL_ROLES = ["admin", "provincial_admin", "super_admin"];
+
 export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardProps) {
   const { user } = useAuthStore();
+
+  // Mirrors the mobile composer: provincial-level admins choose the audience and
+  // post as the province; a municipal admin is pinned to their own municipality.
+  const isProvincial = PROVINCIAL_ROLES.includes(user?.role ?? "");
+  const homeMunicipality = user?.municipality ?? "";
+  const defaultPostedBy = isProvincial
+    ? "Provincial Government of Nueva Vizcaya"
+    : homeMunicipality
+      ? `LGU ${homeMunicipality}`
+      : (user?.name ?? "");
+
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [urgent, setUrgent] = useState(false);
-  const [municipality, setMunicipality] = useState("all");
-  // Agency/source shown to residents as the author of the post (e.g.
-  // "PDRRMO Nueva Vizcaya", "Philstar"), instead of the logged-in admin's
-  // personal name. Defaults to the admin's name if left blank.
-  const [postedBy, setPostedBy] = useState("");
+  const [municipality, setMunicipality] = useState(isProvincial ? "all" : homeMunicipality);
+  const [postedBy, setPostedBy] = useState(defaultPostedBy);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fetchingMeta, setFetchingMeta] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState("");
-  // Import-from-link (interim FB / news importer)
-  const [importUrl, setImportUrl] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
 
-  const resetForm = () => {
-    setTitle(""); setBody(""); setUrgent(false); setMunicipality("all");
-    setImportUrl(""); setSourceUrl(""); setImageUrl(""); setPostedBy("");
+  const openDialog = () => {
+    // Re-apply role-based defaults every time the composer opens.
+    setTitle("");
+    setBody("");
+    setUrgent(false);
+    setMunicipality(isProvincial ? "all" : homeMunicipality);
+    setPostedBy(defaultPostedBy);
+    setSourceUrl("");
+    setSourceLabel("");
+    setImageUrl("");
+    setOpen(true);
   };
 
-  const handleImport = async () => {
-    const url = importUrl.trim();
-    if (!url) return;
-    setImporting(true);
+  // Paste a source link and auto-fill the headline + message from the page's
+  // Open Graph / meta tags — same one-tap flow as the mobile app.
+  const handleAutofill = async () => {
+    const url = sourceUrl.trim();
+    if (!url) {
+      toast({ title: "Paste a source link first", variant: "destructive" });
+      return;
+    }
+    setFetchingMeta(true);
     try {
       const fn = httpsCallable<
         { url: string },
         { title: string; description: string; image: string; siteName: string; url: string }
       >(functions, "fetchLinkPreview");
       const { data } = await fn({ url });
-      if (data.title) setTitle(data.title.slice(0, 140));
+      if (data.title) setTitle(data.title.slice(0, 150));
       if (data.description) setBody(data.description);
       if (data.image) setImageUrl(data.image);
-      // Credit the original source as the author (e.g. "Philstar") so the post
-      // reads like the app's agency-sourced announcements, not "posted by <admin>".
-      if (data.siteName) setPostedBy(data.siteName);
-      setSourceUrl(data.url || url);
+      if (data.siteName && !sourceLabel.trim()) setSourceLabel(data.siteName);
+      if (data.url) setSourceUrl(data.url);
       const bodyMissing = !data.description;
       toast({
-        title: bodyMissing ? "Imported title only" : "Imported — review before posting",
+        title: bodyMissing ? "Imported title only" : "Filled from link — review before posting",
         description: bodyMissing
-          ? "This link (often Facebook) hides its text behind a login. Paste the message body manually."
+          ? "This link (often Facebook) hides its text behind a login. Paste the message manually."
           : undefined,
         variant: "success" as never,
       });
     } catch {
-      toast({ title: "Couldn't import that link", description: "Paste the text manually instead.", variant: "destructive" });
+      toast({ title: "Couldn't read that link", description: "Fill the fields in manually instead.", variant: "destructive" });
     } finally {
-      setImporting(false);
+      setFetchingMeta(false);
     }
   };
 
+  const canPost = !!title.trim() && !!body.trim() && !!postedBy.trim();
+
   const handlePost = async () => {
-    if (!title.trim() || !body.trim() || !user) return;
+    if (!canPost || !user) return;
     setSaving(true);
     try {
       await postAnnouncement({
@@ -91,14 +112,15 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
         body: body.trim(),
         urgent,
         isUrgent: urgent,
-        municipality,
-        postedBy: postedBy.trim() || user.name,
-        ...(sourceUrl ? { sourceUrl, sourceLabel: "View original post" } : {}),
+        municipality: isProvincial ? municipality : homeMunicipality,
+        postedBy: postedBy.trim(),
+        ...(sourceUrl.trim()
+          ? { sourceUrl: sourceUrl.trim(), sourceLabel: sourceLabel.trim() || "View original post" }
+          : {}),
         ...(imageUrl ? { imageUrl } : {}),
       });
       toast({ title: "Announcement posted", variant: "success" as never });
       setOpen(false);
-      resetForm();
     } catch {
       toast({ title: "Failed to post", variant: "destructive" });
     } finally {
@@ -122,7 +144,7 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{announcements.length} announcement{announcements.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" className="h-8 text-xs" onClick={() => setOpen(true)}>
+        <Button size="sm" className="h-8 text-xs" onClick={openDialog}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Post
         </Button>
       </div>
@@ -172,83 +194,89 @@ export function AnnouncementsCard({ announcements, loading }: AnnouncementsCardP
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
-        <DialogContent className="max-w-md">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Post Announcement</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4" /> Post Announcement
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {isProvincial ? "Province-wide or per municipality" : `For ${homeMunicipality || "your municipality"} residents`}
+            </p>
           </DialogHeader>
+
           <div className="space-y-3">
-            {/* Interim importer: pull a public post's title/text/image so an
-                admin can review + publish without retyping. Nothing auto-posts. */}
-            <div className="space-y-1.5 rounded-lg border border-dashed p-2.5 bg-muted/30">
-              <Label className="text-xs flex items-center gap-1">
-                <Link2 className="h-3.5 w-3.5" /> Import from a link (Facebook / news)
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="Paste a public post URL…"
-                  className="text-xs"
-                />
-                <Button type="button" variant="outline" size="sm" onClick={handleImport} disabled={importing || !importUrl.trim()}>
-                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  <span className="ml-1 hidden sm:inline">Import</span>
-                </Button>
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                Pulls the title, text &amp; image for you to review — then Post. Nothing is auto-published.
-              </p>
-            </div>
             <div className="space-y-1">
-              <Label className="text-xs">Title *</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" />
+              <Label className="text-xs">Announcement Title *</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Road Project Update in Bambang" maxLength={150} />
             </div>
+
             <div className="space-y-1">
-              <Label className="text-xs">Message *</Label>
-              <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message…" rows={4} className="resize-none" />
+              <Label className="text-xs">Message / Details *</Label>
+              <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write the full announcement details here…" rows={5} maxLength={1000} className="resize-none" />
             </div>
+
             <div className="space-y-1">
-              <Label className="text-xs">Posted by (agency / source)</Label>
-              <Input
-                value={postedBy}
-                onChange={(e) => setPostedBy(e.target.value)}
-                placeholder={`e.g. PDRRMO Nueva Vizcaya — defaults to ${user?.name ?? "your name"}`}
-              />
+              <Label className="text-xs">Posted By *</Label>
+              <Input value={postedBy} onChange={(e) => setPostedBy(e.target.value)} placeholder="e.g. Provincial Government of Nueva Vizcaya" />
             </div>
-            {imageUrl && (
-              <div className="space-y-1">
-                <img src={imageUrl} alt="Imported preview" className="rounded-md border w-full h-32 object-cover" />
-              </div>
-            )}
-            {sourceUrl && (
-              <p className="text-[10px] text-muted-foreground truncate">Source: {sourceUrl}</p>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Target</Label>
+
+            {/* Audience: dropdown for provincial admins, locked for municipal admins */}
+            <div className="space-y-1">
+              <Label className="text-xs">Target Audience</Label>
+              {isProvincial ? (
                 <Select value={municipality} onValueChange={setMunicipality}>
                   <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Province-wide</SelectItem>
+                    <SelectItem value="all">🌍 All Municipalities (Province-Wide)</SelectItem>
                     {MUNICIPALITIES.map((m) => <SelectItem key={m.name} value={m.name}>{m.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Urgent</Label>
-                <div className="flex items-center gap-2 pt-2">
-                  <Switch checked={urgent} onCheckedChange={setUrgent} />
-                  <span className="text-xs text-muted-foreground">{urgent ? "Yes" : "No"}</span>
+              ) : (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium flex-1">{homeMunicipality || "Your municipality"}</span>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </div>
+              )}
+            </div>
+
+            {/* Source link + one-tap auto-fill, mirroring the mobile composer */}
+            <div className="space-y-1">
+              <Label className="text-xs">Source URL (optional)</Label>
+              <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://facebook.com/post/…" className="text-sm" />
+              <p className="text-[10px] text-muted-foreground">Citizens can tap to view the original post.</p>
+            </div>
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={handleAutofill} disabled={fetchingMeta || !sourceUrl.trim()}>
+              {fetchingMeta ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              {fetchingMeta ? "Reading link…" : "Auto-fill title & message from link"}
+            </Button>
+
+            {imageUrl && (
+              <img src={imageUrl} alt="Imported preview" className="rounded-md border w-full h-32 object-cover" />
+            )}
+
+            <div className="space-y-1">
+              <Label className="text-xs">Source Label (optional)</Label>
+              <Input value={sourceLabel} onChange={(e) => setSourceLabel(e.target.value)} placeholder="e.g. Governor's Office • Facebook" />
+            </div>
+
+            {/* Urgent toggle, styled like the mobile sheet */}
+            <div className={`flex items-center gap-3 rounded-lg border p-3 ${urgent ? "border-red-300 bg-red-50" : "border-muted bg-muted/30"}`}>
+              <AlertTriangle className={`h-5 w-5 shrink-0 ${urgent ? "text-red-500" : "text-muted-foreground"}`} />
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${urgent ? "text-red-700" : ""}`}>Mark as Urgent</p>
+                <p className="text-[11px] text-muted-foreground">Shows a red border and URGENT badge to citizens.</p>
               </div>
+              <Switch checked={urgent} onCheckedChange={setUrgent} />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handlePost} disabled={saving || !title.trim() || !body.trim()}>
+            <Button onClick={handlePost} disabled={saving || !canPost}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Post
+              Post Announcement
             </Button>
           </DialogFooter>
         </DialogContent>
