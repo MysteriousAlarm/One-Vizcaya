@@ -1350,6 +1350,162 @@ exports.rainfallWatch = onSchedule(
   }
 );
 
+// ── Windy point-forecast helper ──────────────────────────────────────────────
+// Calls the Windy Point Forecast API (api.windy.com) for one coordinate and
+// returns a simplified next-hours series. The API key is never exposed to the
+// browser — it lives in the WINDY_API_KEY secret and is only used server-side.
+// Returns null on any failure so callers can no-op gracefully.
+async function fetchWindyPointForecast(lat, lon, apiKey) {
+  try {
+    const resp = await fetch("https://api.windy.com/api/point-forecast/v2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lat,
+        lon,
+        model: "gfs",
+        parameters: ["wind", "windGust", "temp", "precip"],
+        levels: ["surface"],
+        key: apiKey,
+      }),
+    });
+    if (!resp.ok) return null;
+    const d = await resp.json();
+    const ts = d.ts || [];
+    const u = d["wind_u-surface"] || [];
+    const v = d["wind_v-surface"] || [];
+    const gust = d["gust-surface"] || [];
+    const tempK = d["temp-surface"] || [];
+    const precip = d["past3hprecip-surface"] || [];
+    const series = [];
+    for (let i = 0; i < ts.length; i++) {
+      const windMs = Math.hypot(u[i] ?? 0, v[i] ?? 0);
+      series.push({
+        ts: ts[i],
+        windKmh: Math.round(windMs * 3.6),
+        gustKmh: Math.round((gust[i] ?? windMs) * 3.6),
+        tempC: tempK[i] != null ? Math.round(tempK[i] - 273.15) : null,
+        // Windy returns 3-hourly accumulated precip in metres → mm.
+        precipMm: precip[i] != null ? +(precip[i] * 1000).toFixed(1) : 0,
+      });
+    }
+    return series;
+  } catch (e) {
+    console.error("fetchWindyPointForecast error:", e);
+    return null;
+  }
+}
+
+// ── Windy forecast (admin, on-demand) ────────────────────────────────────────
+// Powers the web console Weather widget. Admin-only; proxies the Windy Point
+// Forecast API so the key stays server-side. Pass {lat,lon} or {municipality}.
+exports.getWindyForecast = onCall(
+  { secrets: ["WINDY_API_KEY"] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be authenticated.");
+    }
+    const role = await resolveCallerRole(request);
+    if (
+      !["admin", "municipal_admin", "provincial_admin", "super_admin"].includes(
+        role
+      )
+    ) {
+      throw new HttpsError("permission-denied", "Admins only.");
+    }
+    const apiKey = process.env.WINDY_API_KEY;
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Windy API key not configured. Set it with: firebase functions:secrets:set WINDY_API_KEY"
+      );
+    }
+
+    let { lat, lon } = request.data || {};
+    const muni = request.data?.municipality;
+    if ((lat == null || lon == null) && muni && NV_MUNICIPALITY_COORDS[muni]) {
+      [lat, lon] = NV_MUNICIPALITY_COORDS[muni];
+    }
+    // Default to the provincial capital (Bayombong) when nothing is supplied.
+    if (lat == null || lon == null) [lat, lon] = NV_MUNICIPALITY_COORDS.Bayombong;
+
+    const series = await fetchWindyPointForecast(lat, lon, apiKey);
+    if (!series) {
+      throw new HttpsError("unavailable", "Windy forecast is unavailable right now.");
+    }
+    // Trim to the next ~24h (8 three-hourly slots) to keep the payload small.
+    return { lat, lon, municipality: muni || null, series: series.slice(0, 8) };
+  }
+);
+
+// ── Windy strong-wind watch (scheduled) ──────────────────────────────────────
+// Complements rainfallWatch (which covers RAIN via OpenWeatherMap) by adding
+// strong-WIND advisories from Windy — Windy's specialty — so the two don't
+// duplicate each other. No-ops without a WINDY_API_KEY. Broadcasts are scoped
+// per municipality and rate-limited by a per-muni cooldown.
+// Runs every 6h to stay within Windy's free Point-Forecast tier: 4 runs/day ×
+// 15 municipalities ≈ 60 calls/day. If you move to a paid tier you can lower
+// this to "0 */3 * * *" for fresher advisories.
+exports.windyWindWatch = onSchedule(
+  { schedule: "0 */6 * * *", timeZone: "Asia/Manila", secrets: ["WINDY_API_KEY"] },
+  async () => {
+    const apiKey = process.env.WINDY_API_KEY;
+    if (!apiKey) {
+      console.warn("windyWindWatch: WINDY_API_KEY not set — skipping.");
+      return;
+    }
+    const db = admin.firestore();
+    const now = Date.now();
+    const COOLDOWN_MS = 6 * 60 * 60 * 1000;
+    const STRONG_GUST_KMH = 60; // advisory threshold
+    const SEVERE_GUST_KMH = 85; // urgent threshold
+
+    for (const [muni, [lat, lon]] of Object.entries(NV_MUNICIPALITY_COORDS)) {
+      try {
+        const alertRef = db.collection("weather_alerts").doc(muni);
+        const alertSnap = await alertRef.get();
+        const lastMs = alertSnap.exists
+          ? alertSnap.data().lastWindAlertMs || 0
+          : 0;
+        if (now - lastMs < COOLDOWN_MS) continue;
+
+        const series = await fetchWindyPointForecast(lat, lon, apiKey);
+        if (!series || series.length === 0) continue;
+
+        // Look at roughly the next 24h.
+        const window = series.slice(0, 8);
+        const maxGust = window.reduce((m, s) => Math.max(m, s.gustKmh), 0);
+        if (maxGust < STRONG_GUST_KMH) continue;
+
+        const severe = maxGust >= SEVERE_GUST_KMH;
+        const title = severe
+          ? `🌀 Severe winds expected — ${muni}`
+          : `💨 Strong winds expected — ${muni}`;
+        const body =
+          `Wind gusts up to about ${maxGust} km/h are expected in the next ` +
+          "several hours. Secure loose objects and stay indoors when it peaks.";
+
+        await db.collection("broadcasts").add({
+          title,
+          body,
+          scope: muni,
+          urgent: severe,
+          type: "weather",
+          source: "windyWindWatch",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await alertRef.set(
+          { lastWindAlertMs: now, municipality: muni },
+          { merge: true }
+        );
+        console.log(`windyWindWatch: alerted ${muni} (gust ${maxGust} km/h).`);
+      } catch (e) {
+        console.error(`windyWindWatch ${muni} error:`, e);
+      }
+    }
+  }
+);
+
 // ── RA 10173: storage cleanup helper ─────────────────────────────────────────
 // Derives the Storage object path from a Firebase download URL and deletes it.
 // Used to guarantee no orphaned photo evidence (with embedded EXIF/location)

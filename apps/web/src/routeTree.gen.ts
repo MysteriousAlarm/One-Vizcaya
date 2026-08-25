@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardWeatherRouteImport } from './routes/dashboard/weather'
 import { Route as DashboardVerificationsRouteImport } from './routes/dashboard/verifications'
 import { Route as DashboardUsersRouteImport } from './routes/dashboard/users'
 import { Route as DashboardRespondersRouteImport } from './routes/dashboard/responders'
@@ -47,6 +48,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
 const DashboardVerificationsRoute = DashboardVerificationsRouteImport.update({
   id: '/verifications',
   path: '/verifications',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardWeatherRoute = DashboardWeatherRouteImport.update({
+  id: '/weather',
+  path: '/weather',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardUsersRoute = DashboardUsersRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/responders': typeof DashboardRespondersRoute
   '/dashboard/users': typeof DashboardUsersRoute
   '/dashboard/verifications': typeof DashboardVerificationsRoute
+  '/dashboard/weather': typeof DashboardWeatherRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRoutesByTo {
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/dashboard/responders': typeof DashboardRespondersRoute
   '/dashboard/users': typeof DashboardUsersRoute
   '/dashboard/verifications': typeof DashboardVerificationsRoute
+  '/dashboard/weather': typeof DashboardWeatherRoute
   '/dashboard': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/dashboard/responders': typeof DashboardRespondersRoute
   '/dashboard/users': typeof DashboardUsersRoute
   '/dashboard/verifications': typeof DashboardVerificationsRoute
+  '/dashboard/weather': typeof DashboardWeatherRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/dashboard/responders'
     | '/dashboard/users'
     | '/dashboard/verifications'
+    | '/dashboard/weather'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/dashboard/responders'
     | '/dashboard/users'
     | '/dashboard/verifications'
+    | '/dashboard/weather'
     | '/dashboard'
   id:
     | '__root__'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/dashboard/responders'
     | '/dashboard/users'
     | '/dashboard/verifications'
+    | '/dashboard/weather'
     | '/dashboard/'
   fileRoutesById: FileRoutesById
 }
@@ -234,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/verifications'
       fullPath: '/dashboard/verifications'
       preLoaderRoute: typeof DashboardVerificationsRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/weather': {
+      id: '/dashboard/weather'
+      path: '/weather'
+      fullPath: '/dashboard/weather'
+      preLoaderRoute: typeof DashboardWeatherRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/users': {
@@ -313,6 +332,7 @@ interface DashboardRouteRouteChildren {
   DashboardRespondersRoute: typeof DashboardRespondersRoute
   DashboardUsersRoute: typeof DashboardUsersRoute
   DashboardVerificationsRoute: typeof DashboardVerificationsRoute
+  DashboardWeatherRoute: typeof DashboardWeatherRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
@@ -327,6 +347,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardRespondersRoute: DashboardRespondersRoute,
   DashboardUsersRoute: DashboardUsersRoute,
   DashboardVerificationsRoute: DashboardVerificationsRoute,
+  DashboardWeatherRoute: DashboardWeatherRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 
