@@ -477,6 +477,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return (icon: Icons.check_circle, color: const Color(0xFF2E7D32));
       case 'ongoing':
         return (icon: Icons.construction, color: const Color(0xFFE65100));
+      case 'urgent':
+        return (icon: Icons.warning_amber_rounded, color: const Color(0xFF8B0000));
       case 'info':
         return (icon: Icons.send, color: const Color(0xFF1565C0));
       default:
