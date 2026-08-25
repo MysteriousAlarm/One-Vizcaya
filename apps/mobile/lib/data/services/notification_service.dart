@@ -8,6 +8,7 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/toast_utils.dart';
 import '../../presentation/state/municipality_state.dart';
+import '../../presentation/widgets/broadcast_presenter.dart';
 import 'offline_queue_service.dart';
 
 @pragma('vm:entry-point')
@@ -69,8 +70,11 @@ class NotificationService {
       }
     });
 
-    // Show FCM foreground messages as toasts
+    // Show FCM foreground messages as toasts — EXCEPT broadcasts, which the
+    // in-app Firestore listener presents professionally (urgent takeover /
+    // heads-up banner). Skipping them here avoids a duplicate green toast.
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.data['type'] == 'broadcast') return;
       final notification = message.notification;
       if (notification != null) {
         final title = notification.title ?? 'Update';
@@ -108,7 +112,24 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final reportId = message.data['reportId'] as String?;
+    final data = message.data;
+
+    // Broadcast opened from the notification tray (app was backgrounded/killed):
+    // show the same in-app presentation the foreground listener would have.
+    if (data['type'] == 'broadcast') {
+      final navKey = navigatorKey;
+      if (navKey != null) {
+        BroadcastPresenter.present(
+          navigatorKey: navKey,
+          urgent: data['urgent'] == 'true',
+          title: data['title'] as String? ?? 'Announcement',
+          body: data['body'] as String? ?? '',
+        );
+      }
+      return;
+    }
+
+    final reportId = data['reportId'] as String?;
     if (reportId != null && reportId.isNotEmpty) {
       navigatorKey?.currentState?.pushNamed(
         '/status',
@@ -192,17 +213,47 @@ class NotificationService {
         final rawData = doc.doc.data();
         if (rawData == null) continue;
         final data = rawData;
-        final scope = data['scope'] as String? ?? 'All Province';
-        if (scope != 'All Province' && scope != municipality) continue;
+        // Resolve the target municipality the same way the onNewBroadcast Cloud
+        // Function does, so in-app presentation matches who actually gets the push:
+        //   • admin composer: scope="all" (everyone) or scope="municipality" + municipality field
+        //   • rainfallWatch:  scope=<municipality name>
+        //   • legacy:         scope="All Province"
+        final scope = data['scope'] as String?;
+        final muniField = data['municipality'] as String?;
+        String? targetMuni;
+        if (muniField != null && muniField.isNotEmpty) {
+          targetMuni = muniField;
+        } else if (scope != null &&
+            !const ['all', 'All Province', 'municipality'].contains(scope)) {
+          targetMuni = scope; // scope is itself a municipality name
+        }
+        // null target = province-wide (everyone); otherwise must match this user.
+        if (targetMuni != null && targetMuni != municipality) continue;
+
         final title = data['title'] as String? ?? 'Announcement';
         final body = data['body'] as String? ?? '';
-        ToastUtils.showInfo('📢 $title: $body');
+        final urgent = data['urgent'] as bool? ?? false;
+        final ts = (data['timestamp'] as Timestamp?)?.toDate();
+
+        final navKey = navigatorKey;
+        if (navKey != null) {
+          BroadcastPresenter.present(
+            navigatorKey: navKey,
+            urgent: urgent,
+            title: title,
+            body: body,
+            timestamp: ts,
+          );
+        } else {
+          // Fallback if the navigator isn't ready yet (very early startup).
+          ToastUtils.showInfo('📢 $title: $body');
+        }
         try {
           await _firestore.collection('users').doc(uid).collection('notifications').add({
             'type': 'broadcast',
             'title': title,
             'body': body,
-            'status': 'info',
+            'status': urgent ? 'urgent' : 'info',
             'timestamp': FieldValue.serverTimestamp(),
             'read': false,
           });

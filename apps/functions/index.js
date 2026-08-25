@@ -841,7 +841,7 @@ exports.onNewBroadcast = onDocumentCreated(
     const data = event.data?.data();
     if (!data) return;
 
-    const { title, body, scope, municipality } = data;
+    const { title, body, scope, municipality, urgent } = data;
     if (!title || !body) return;
 
     const db = admin.firestore();
@@ -884,11 +884,20 @@ exports.onNewBroadcast = onDocumentCreated(
         .sendEachForMulticast({
           tokens: batch,
           notification: { title, body },
+          // Data payload lets the app recognise a broadcast: in the foreground it
+          // presents the in-app urgent takeover / heads-up banner (and suppresses
+          // the generic toast), and a tray tap opens the same presentation.
+          data: {
+            type: "broadcast",
+            urgent: urgent ? "true" : "false",
+            title: String(title),
+            body: String(body),
+          },
           android: {
             notification: {
               channelId: "one_vizcaya_broadcasts",
               priority: "high",
-              color: "#1B5E20",
+              color: urgent ? "#8B0000" : "#1B5E20",
             },
           },
         })
