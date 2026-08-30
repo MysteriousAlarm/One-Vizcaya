@@ -17,6 +17,7 @@ import '../../core/utils/toast_utils.dart';
 import 'sos_active_screen.dart';
 import '../widgets/municipality_info_sheet.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/whats_new_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -62,6 +63,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _checkConnectivity();
     _refreshQueueCount();
     _loadResidencyNudge();
+    // After the first frame, show the mandatory "What's New" dialog once per
+    // update so citizens see what the new version added or changed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) WhatsNewDialog.maybeShow(context, _appBarColor);
+    });
     // Periodically recheck connectivity so the banner auto-dismisses
     _connectivityTimer = Timer.periodic(
       const Duration(seconds: 30),
