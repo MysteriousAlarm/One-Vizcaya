@@ -16,6 +16,7 @@ import 'presentation/screens/home_screen.dart';
 import 'presentation/screens/report_problem_screen.dart';
 import 'presentation/screens/report_status_screen.dart';
 import 'presentation/screens/emergency_contacts_screen.dart';
+import 'presentation/screens/citizen_guide_screen.dart';
 import 'presentation/screens/other_screens.dart';
 import 'presentation/screens/announcements_screen.dart';
 import 'presentation/screens/admin_dashboard_screen.dart';
@@ -275,6 +276,7 @@ class _OneVizcayaAppState extends State<OneVizcayaApp> {
             '/report': (context) => const ReportProblemScreen(),
             '/status': (context) => const ReportStatusScreen(),
             '/contacts': (context) => const EmergencyContactsScreen(),
+            '/guide': (context) => const CitizenGuideScreen(),
             '/announcements': (context) => const AnnouncementsScreen(),
             '/support': (context) => const SupportScreen(),
             '/notifications': (context) => const NotificationsScreen(),
