@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { httpsCallable } from "firebase/functions";
-import { CloudRain, Wind, Thermometer, Cloud, MapPin, Loader2, RefreshCw, AlertTriangle, Droplets } from "lucide-react";
+import { CloudRain, Wind, Thermometer, Cloud, MapPin, Loader2, RefreshCw, AlertTriangle, Droplets, Sun } from "lucide-react";
 import { functions } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,24 @@ interface ForecastResult {
   series: ForecastSlot[];
 }
 
+interface UvSlot {
+  key: string;
+  dateLabel: string;
+  timeLabel: string;
+  uv: number;
+}
+
+const _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// WHO UV Index risk bands.
+function uvLevel(uv: number): { label: string; color: string } {
+  if (uv < 3) return { label: "Low", color: "#2E7D32" };
+  if (uv < 6) return { label: "Moderate", color: "#F9A825" };
+  if (uv < 8) return { label: "High", color: "#E65100" };
+  if (uv < 11) return { label: "Very High", color: "#C62828" };
+  return { label: "Extreme", color: "#6A1B9A" };
+}
+
 function WeatherPage() {
   const [place, setPlace] = useState<string>("Province-wide");
   const [overlay, setOverlay] = useState<string>("rain");
@@ -61,8 +79,60 @@ function WeatherPage() {
   const [error, setError] = useState<string | null>(null);
   const [noKey, setNoKey] = useState(false);
 
+  const [uv, setUv] = useState<UvSlot[]>([]);
+  const [uvLoading, setUvLoading] = useState(false);
+  const [uvError, setUvError] = useState(false);
+
   const [lat, lon] = NV_COORDS[place] ?? NV_COORDS["Province-wide"];
   const zoom = place === "Province-wide" ? 9 : 11;
+
+  // UV Index forecast at 4-hour intervals via Open-Meteo (free, no API key).
+  // Auto-loads when the selected place changes — independent of the Windy key.
+  useEffect(() => {
+    let cancelled = false;
+    setUvLoading(true);
+    setUvError(false);
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&hourly=uv_index&timezone=Asia%2FManila&forecast_days=2`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("uv"))))
+      .then((d) => {
+        if (cancelled) return;
+        const times: string[] = d?.hourly?.time ?? [];
+        const values: number[] = d?.hourly?.uv_index ?? [];
+        // Manila "now" as a comparable YYYYMMDDHH key (sv-SE gives ISO-like text).
+        const nowKey = new Date()
+          .toLocaleString("sv-SE", { timeZone: "Asia/Manila" })
+          .slice(0, 13)
+          .replace(/[- :]/g, "");
+        const slots: UvSlot[] = [];
+        for (let i = 0; i < times.length && slots.length < 8; i++) {
+          const t = times[i]; // "2026-09-04T08:00" (Manila local)
+          const hour = parseInt(t.slice(11, 13), 10);
+          if (hour % 4 !== 0) continue; // every 4 hours
+          if (t.slice(0, 13).replace(/[-T:]/g, "") < nowKey) continue; // now onward
+          const [, m, dd] = t.slice(0, 10).split("-").map(Number);
+          const h12 = hour % 12 === 0 ? 12 : hour % 12;
+          slots.push({
+            key: t,
+            dateLabel: `${_MONTHS[m - 1]} ${dd}`,
+            timeLabel: `${h12} ${hour < 12 ? "AM" : "PM"}`,
+            uv: Math.round((values[i] ?? 0) * 10) / 10,
+          });
+        }
+        setUv(slots);
+      })
+      .catch(() => {
+        if (!cancelled) setUvError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setUvLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lon]);
 
   const embedUrl = useMemo(() => {
     const p = new URLSearchParams({
@@ -222,6 +292,44 @@ function WeatherPage() {
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 Wind (sustained/gust) in km/h · rain in mm per 3h. Red = gusts ≥ 60 km/h; blue = heavy rain. Source: Windy Point Forecast.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* UV Index — 4-hour intervals (Open-Meteo, no key needed) */}
+      <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-sm flex items-center gap-1.5">
+            <Sun className="h-4 w-4 text-amber-500" /> UV Index — {place}
+          </CardTitle>
+          {uvLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        </CardHeader>
+        <CardContent>
+          {uvError ? (
+            <p className="text-sm text-destructive">Could not load the UV index right now.</p>
+          ) : uv.length === 0 && !uvLoading ? (
+            <p className="text-sm text-muted-foreground">No UV data available.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="flex gap-2 min-w-max pb-1">
+                {uv.map((s) => {
+                  const lvl = uvLevel(s.uv);
+                  return (
+                    <div key={s.key} className="w-24 shrink-0 rounded-lg border p-2.5 text-center">
+                      <p className="text-[11px] font-medium text-muted-foreground">{s.dateLabel}</p>
+                      <p className="text-[11px] text-muted-foreground">{s.timeLabel}</p>
+                      <p className="mt-1 text-2xl font-bold" style={{ color: lvl.color }}>{s.uv}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: lvl.color }}>
+                        {lvl.label}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                UV Index at 4-hour intervals (Manila time). Low 0–2 · Moderate 3–5 · High 6–7 · Very High 8–10 · Extreme 11+. Source: Open-Meteo.
               </p>
             </div>
           )}

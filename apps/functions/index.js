@@ -1443,11 +1443,11 @@ exports.getWindyForecast = onCall(
 // strong-WIND advisories from Windy — Windy's specialty — so the two don't
 // duplicate each other. No-ops without a WINDY_API_KEY. Broadcasts are scoped
 // per municipality and rate-limited by a per-muni cooldown.
-// Runs every 6h to stay within Windy's free Point-Forecast tier: 4 runs/day ×
-// 15 municipalities ≈ 60 calls/day. If you move to a paid tier you can lower
-// this to "0 */3 * * *" for fresher advisories.
+// Runs every 3h for fresher advisories: 8 runs/day × 15 municipalities
+// ≈ 120 Point-Forecast calls/day. Watch Windy's free-tier quota; if it's tight,
+// raise this back to "0 */6 * * *" or reduce the municipality set.
 exports.windyWindWatch = onSchedule(
-  { schedule: "0 */6 * * *", timeZone: "Asia/Manila", secrets: ["WINDY_API_KEY"] },
+  { schedule: "0 */3 * * *", timeZone: "Asia/Manila", secrets: ["WINDY_API_KEY"] },
   async () => {
     const apiKey = process.env.WINDY_API_KEY;
     if (!apiKey) {
