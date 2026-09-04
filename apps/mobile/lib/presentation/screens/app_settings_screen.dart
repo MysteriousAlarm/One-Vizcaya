@@ -23,6 +23,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   bool _offlineModeEnabled = false;
   bool _highContrastMode = false;
   bool _darkModeEnabled = false;
+  bool _useLocationMunicipality = false;
   bool _biometricLock = false;
   String _selectedLanguage = 'English';
   // Internal sort order key stored in prefs (language-independent)
@@ -43,6 +44,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _offlineModeEnabled = prefs.getBool('offline_mode') ?? false;
       _highContrastMode = prefs.getBool('high_contrast') ?? false;
       _darkModeEnabled = prefs.getBool('dark_mode') ?? false;
+      _useLocationMunicipality =
+          prefs.getBool('use_location_municipality') ?? false;
       _biometricLock = prefs.getBool(kBiometricAppLockKey) ?? false;
       _selectedLanguage = prefs.getString('language') ?? 'English';
       _reportSortKey = prefs.getString('report_sort') ?? 'newestFirst';
@@ -323,6 +326,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                     _saveSetting('high_contrast', val);
                     ToastUtils.showInfo(
                       'Restart the app to apply contrast changes',
+                    );
+                  },
+                ),
+                _DividerLine(),
+                _ToggleTile(
+                  icon: Icons.my_location,
+                  iconColor: const Color(0xFF2E7D32),
+                  title: 'Use my location',
+                  subtitle:
+                      'Automatically set the municipality to the one nearest you',
+                  value: _useLocationMunicipality,
+                  onChanged: (val) async {
+                    setState(() => _useLocationMunicipality = val);
+                    await oneVizcayaState.setUseLocationMunicipality(val);
+                    ToastUtils.showInfo(
+                      val
+                          ? 'Using your location to set the municipality…'
+                          : 'Location-based municipality turned off.',
                     );
                   },
                 ),

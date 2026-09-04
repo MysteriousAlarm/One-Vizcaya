@@ -63,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _checkConnectivity();
     _refreshQueueCount();
     _loadResidencyNudge();
+    // If the user opted into location-based municipality, snap to the nearest
+    // one on load (no-op when the toggle is off or location is unavailable).
+    oneVizcayaState.autoSelectFromLocation();
     // After the first frame, show the mandatory "What's New" dialog once per
     // update so citizens see what the new version added or changed.
     WidgetsBinding.instance.addPostFrameCallback((_) {
