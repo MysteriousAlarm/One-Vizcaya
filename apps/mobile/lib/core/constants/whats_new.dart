@@ -29,6 +29,15 @@ class ReleaseNote {
 /// Newest first.
 const List<ReleaseNote> kReleaseNotes = [
   ReleaseNote(
+    version: '1.7.0',
+    build: 29,
+    date: 'September 2026',
+    changes: [
+      ChangeEntry(ChangeType.added,
+          'Use my location — the app can now set your municipality automatically based on where you are. Turn it on in Settings.'),
+    ],
+  ),
+  ReleaseNote(
     version: '1.6.0',
     build: 28,
     date: 'September 2026',
