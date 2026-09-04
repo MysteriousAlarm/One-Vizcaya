@@ -29,6 +29,15 @@ class ReleaseNote {
 /// Newest first.
 const List<ReleaseNote> kReleaseNotes = [
   ReleaseNote(
+    version: '1.6.0',
+    build: 28,
+    date: 'September 2026',
+    changes: [
+      ChangeEntry(ChangeType.added,
+          'New Citizen Guide — search and find government offices and services (SSS, LTO, NBI, Pag-IBIG and more) with tap-to-call, website, and map.'),
+    ],
+  ),
+  ReleaseNote(
     version: '1.5.0',
     build: 27,
     date: 'August 2026',
