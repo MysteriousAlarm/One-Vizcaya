@@ -802,6 +802,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: _ServiceGridItem(
+                      iconContainerSize: iconSize,
+                      icon: Icons.location_city_rounded,
+                      label: 'Citizen Guide',
+                      iconColor: Colors.white,
+                      bgColor: const Color(0xFF6A1B9A),
+                      onTap: () => Navigator.of(context).pushNamed('/guide'),
+                    ),
+                  ),
+                ),
+                const Expanded(child: SizedBox()),
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          ),
 
           const SizedBox(height: 28),
 
